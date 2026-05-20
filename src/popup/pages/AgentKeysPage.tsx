@@ -307,10 +307,10 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
 
   return (
     <div className="flex flex-col gap-3 pb-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <Shield className="w-4 h-4 text-purple-400" />
-          <span className="text-[13px] font-semibold text-white">{t.agentKeys.title}</span>
+          <span className="text-[13px] font-semibold text-white truncate">{t.agentKeys.title}</span>
           <span className="text-[11px] text-slate-500">({agentKeys.length})</span>
         </div>
         <div className="flex items-center gap-1">
@@ -426,7 +426,7 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
                         )
                       }
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <div
                           className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                             expanded
@@ -441,7 +441,7 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
                           />
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <p className="text-[12px] font-medium text-white truncate">
                               {key.name}
                             </p>
@@ -454,7 +454,7 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {expired && (
                           <span className="badge bg-red-500/10 text-red-400 border-red-500/20 text-[10px]">
                             <Clock className="w-3 h-3 mr-0.5" />
@@ -689,7 +689,7 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] text-slate-500">{t.agentKeys.permissions}</label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-1.5">
               {ALLOWED_PERMISSIONS.map((perm) => {
                 const checked = selectedPermissions.includes(perm);
                 return (
@@ -726,7 +726,7 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
                     <span
                       className={`text-[11px] font-medium ${
                         checked ? 'text-purple-300' : 'text-slate-400'
-                      }`}
+                      } truncate min-w-0`}
                     >
                       {(t.agentKeys.permLabels as Record<string, string>)[perm] || perm}
                     </span>

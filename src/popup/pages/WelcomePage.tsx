@@ -166,7 +166,7 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
 
   if (mode === 'welcome') {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-6 px-6 py-12">
+      <div className="flex min-h-full flex-col items-center justify-center gap-6 px-6 py-10">
         <div className="mb-2">
           <img src="/icons/icon128.png" alt="Falari" className="w-16 h-16 animate-pulse-slow" />
         </div>
@@ -193,7 +193,7 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
     const mnemonicWords = newWallet.mnemonic ? newWallet.mnemonic.split(' ') : [];
 
     return (
-      <div className="flex flex-col h-full gap-3 py-4 px-4 overflow-y-auto">
+      <div className="flex min-h-full flex-col gap-3 py-4 px-4 overflow-y-auto">
         <h2 className="text-lg font-bold text-white">{t.welcome.newWalletTitle}</h2>
 
         <div className="glass-card p-4 flex flex-col gap-3">
@@ -221,11 +221,11 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
           </div>
 
           {mnemonicRevealed ? (
-            <div className="grid grid-cols-3 gap-1.5 p-3 bg-white/[0.04] rounded-lg border border-white/[0.06]">
+            <div className="recovery-grid p-3 bg-white/[0.04] rounded-lg border border-white/[0.06]">
               {mnemonicWords.map((word, i) => (
-                <div key={i} className="flex items-center gap-1.5">
+                <div key={i} className="flex items-center gap-1.5 min-w-0">
                   <span className="text-[10px] text-slate-600 w-4 text-right">{i + 1}</span>
-                  <span className="text-xs text-white tabular-nums">{word}</span>
+                  <span className="text-xs text-white tabular-nums truncate">{word}</span>
                 </div>
               ))}
             </div>
@@ -267,11 +267,11 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
     const words = (newWallet.mnemonic || '').split(' ');
 
     return (
-      <div className="flex flex-col h-full gap-4 py-4 px-4">
+      <div className="flex min-h-full flex-col gap-4 py-4 px-4 overflow-y-auto">
         <h2 className="text-lg font-bold text-white">{t.welcome.verifyTitle}</h2>
         <p className="text-xs text-slate-400">{t.welcome.verifyFillBlanks}</p>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="recovery-grid">
           {words.map((word, i) => {
             const isBlank = blankIndices.includes(i);
             return (
@@ -326,7 +326,7 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
   }
 
   return (
-    <div className="flex flex-col h-full gap-4 py-6 px-4">
+      <div className="flex min-h-full flex-col gap-4 py-6 px-4 overflow-y-auto">
       <h2 className="text-lg font-bold text-white">{t.welcome.importTitle}</h2>
 
       <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-lg p-0.5 border border-white/[0.06]">

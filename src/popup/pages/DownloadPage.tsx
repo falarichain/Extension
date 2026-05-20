@@ -129,7 +129,7 @@ export function DownloadPage({ api }: Props) {
           <CheckCircle className="w-10 h-10 text-green-400" />
           <h3 className="text-sm font-semibold text-white">{t.download.complete}</h3>
           {manifest && (
-            <p className="text-xs text-slate-400">{manifest.fileName}</p>
+            <p className="text-xs text-slate-400 break-all text-center">{manifest.fileName}</p>
           )}
           <button className="btn-secondary w-full mt-1" onClick={handleReset}>
             {t.download.downloadAnother}
@@ -137,10 +137,10 @@ export function DownloadPage({ api }: Props) {
         </div>
       ) : (
         <>
-          <div className="glass-card p-4 flex items-center gap-2">
+          <div className="glass-card p-4 flex flex-wrap items-center gap-2">
             <input
               type="text"
-              className="input-field flex-1"
+              className="input-field flex-1 min-w-[180px]"
               placeholder={t.download.placeholder}
               value={intentId}
               onChange={(e) => setIntentId(e.target.value)}
@@ -148,7 +148,7 @@ export function DownloadPage({ api }: Props) {
               disabled={loading || downloading}
             />
             <button
-              className="btn-primary flex items-center gap-1.5 px-3 py-2"
+              className="btn-primary flex items-center justify-center gap-1.5 px-3 py-2 shrink-0"
               onClick={handleSearch}
               disabled={loading || downloading || !intentId.trim()}
             >

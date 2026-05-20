@@ -299,11 +299,11 @@ export function UploadPage({ api }: Props) {
 
           <div className="glass-card p-4 space-y-3">
             <span className="text-xs text-slate-400">{t.upload.duration}</span>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(84px,1fr))] gap-2">
               {DURATION_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
-                  className={`px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200 border ${
+                  className={`px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200 border min-w-0 ${
                     duration === opt.value
                       ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
                       : 'border-white/[0.06] text-slate-400 hover:text-slate-200 hover:border-white/[0.1]'
@@ -366,14 +366,14 @@ export function UploadPage({ api }: Props) {
               </div>
 
               {progress.stage !== 'error' && (
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex justify-between text-slate-500">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2 text-xs">
+                  <div className="flex justify-between gap-2 text-slate-500 min-w-0">
                     <span>{t.upload.segments}</span>
                     <span className="text-slate-300">
                       {progress.segmentsDone}/{progress.segmentsTotal}
                     </span>
                   </div>
-                  <div className="flex justify-between text-slate-500">
+                  <div className="flex justify-between gap-2 text-slate-500 min-w-0">
                     <span>{t.upload.shards}</span>
                     <span className="text-slate-300">
                       {progress.shardsDone}/{progress.shardsTotal}

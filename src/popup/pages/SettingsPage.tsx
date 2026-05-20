@@ -159,14 +159,14 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
                   key={preset.url}
                   onClick={() => handlePresetNode(preset)}
                   disabled={isActive}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-[12px] transition-all duration-200 ${
+                  className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border text-[12px] transition-all duration-200 min-w-0 ${
                     isActive
                       ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
                       : 'border-white/[0.06] bg-white/[0.02] text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'
                   }`}
                 >
-                  <span>{preset.label}</span>
-                  <span className="text-[10px] text-slate-600">{preset.url}</span>
+                  <span className="truncate">{preset.label}</span>
+                  <span className="text-[10px] text-slate-600 truncate min-w-0">{preset.url}</span>
                 </button>
               );
             })}
