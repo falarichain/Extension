@@ -99,7 +99,7 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
 
   useEffect(() => {
     if (showReceive && account) {
-      QRCode.toDataURL(account.address, { width: 180, margin: 1, color: { dark: '#ffffff', light: '#00000000' } })
+      QRCode.toDataURL(account.address, { width: 180, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } })
         .then(setQrDataUrl)
         .catch(() => setQrDataUrl(null));
     } else {
@@ -185,20 +185,20 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
       </div>
 
       {selectedAccount && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2">
           <button onClick={() => { setShowSend(!showSend); setShowReceive(false); setSendError(''); setSendSuccess(''); if (showSend) { setSendTo(''); setSendAmount(''); } }}
-            className={`glass-card p-3 flex flex-col items-center gap-1.5 transition-all ${showSend ? 'border-blue-400/30 ring-1 ring-blue-400/20' : ''}`}>
+            className={`glass-card p-3 flex flex-col items-center gap-1.5 transition-all min-w-0 ${showSend ? 'border-blue-400/30 ring-1 ring-blue-400/20' : ''}`}>
             <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center"><Send className="w-5 h-5 text-blue-400" /></div>
-            <span className="text-xs font-semibold text-[var(--c-text)]">{t.dashboard.send}</span>
+            <span className="text-xs font-semibold text-[var(--c-text)] truncate max-w-full">{t.dashboard.send}</span>
           </button>
           <button onClick={() => { setShowReceive(!showReceive); setShowSend(false); setSendError(''); setSendSuccess(''); }}
-            className={`glass-card p-3 flex flex-col items-center gap-1.5 transition-all ${showReceive ? 'border-green-400/30 ring-1 ring-green-400/20' : ''}`}>
+            className={`glass-card p-3 flex flex-col items-center gap-1.5 transition-all min-w-0 ${showReceive ? 'border-green-400/30 ring-1 ring-green-400/20' : ''}`}>
             <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center"><QrCode className="w-5 h-5 text-green-400" /></div>
-            <span className="text-xs font-semibold text-[var(--c-text)]">{t.dashboard.receive}</span>
+            <span className="text-xs font-semibold text-[var(--c-text)] truncate max-w-full">{t.dashboard.receive}</span>
           </button>
-          <button className="glass-card p-3 flex flex-col items-center gap-1.5">
+          <button className="glass-card p-3 flex flex-col items-center gap-1.5 min-w-0">
             <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center"><ArrowLeftRight className="w-5 h-5 text-emerald-400" /></div>
-            <span className="text-xs font-semibold text-[var(--c-text)]">{t.dashboard.bridge}</span>
+            <span className="text-xs font-semibold text-[var(--c-text)] truncate max-w-full">{t.dashboard.bridge}</span>
           </button>
         </div>
       )}
@@ -259,7 +259,7 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
         <div className="grid grid-cols-2 gap-2">
           <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-1.5 text-[var(--c-text-dim)]"><Coins className="w-4 h-4" /><span className="text-xs font-semibold">{t.dashboard.totalSupply}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatBalance(chainStatus.totalSupply)} FAI</span></div>
           <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-1.5 text-[var(--c-text-dim)]"><Activity className="w-4 h-4" /><span className="text-xs font-semibold">{t.dashboard.baseFee}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{chainStatus.feeMarket.baseFee.toFixed(4)} FAI</span></div>
-          <div className="glass-card p-3 flex flex-col gap-1.5 col-span-2"><div className="flex items-center gap-1.5 text-[var(--c-text-dim)]"><Database className="w-4 h-4" /><span className="text-xs font-semibold">{t.dashboard.storagePrice}</span></div><div className="flex items-baseline gap-3"><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatFiat(chainStatus.storagePricing.basePricePerGiBMonth)} FAI</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.perGibMonth}</span><span className="text-xs text-[var(--c-text-dim)] ml-auto">{t.dashboard.minFee} {chainStatus.storagePricing.minimumFee.toFixed(4)}</span></div></div>
+          <div className="glass-card p-3 flex flex-col gap-1.5 col-span-2"><div className="flex items-center gap-1.5 text-[var(--c-text-dim)]"><Database className="w-4 h-4 shrink-0" /><span className="text-xs font-semibold truncate">{t.dashboard.storagePrice}</span></div><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatFiat(chainStatus.storagePricing.basePricePerGiBMonth)} FAI</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.perGibMonth}</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.minFee} {chainStatus.storagePricing.minimumFee.toFixed(4)}</span></div></div>
         </div>
       </>)}
 

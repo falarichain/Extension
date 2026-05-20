@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState } from 'react';
 import {
   LayoutDashboard,
   ArrowUpCircle,
@@ -41,21 +41,9 @@ export default function Layout({ currentPage, onNavigate, chainNode, chainStatus
   const accounts = useAppStore((s) => s.accounts);
   const selectedAccount = useAppStore((s) => s.selectedAccount);
   const [walletOpen, setWalletOpen] = useState(false);
-  const [isSidePanel, setIsSidePanel] = useState(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('mode') === 'sidepanel') {
-      setIsSidePanel(true);
-      document.body.style.width = '100%';
-      document.body.style.height = '100%';
-      const root = document.getElementById('root');
-      if (root) {
-        root.style.width = '100%';
-        root.style.height = '100%';
-      }
-    }
-  }, []);
+  const [isSidePanel] = useState(
+    () => new URLSearchParams(window.location.search).get('mode') === 'sidepanel',
+  );
 
   const selectedWallet = accounts.find((a) => a.address === selectedAccount) ?? null;
 
@@ -79,33 +67,37 @@ export default function Layout({ currentPage, onNavigate, chainNode, chainStatus
   return (
     <div
       data-theme={theme}
-      className={`bg-[var(--c-bg)] relative w-full h-full overflow-hidden ${currentPage !== 'welcome' ? 'grid grid-rows-[56px_1fr_64px]' : 'flex flex-col'}`}
+      className={`bg-[var(--c-bg)] relative w-full h-full overflow-hidden grid ${
+        currentPage !== 'welcome'
+          ? 'grid-rows-[56px_minmax(0,1fr)_64px]'
+          : 'grid-rows-[56px_minmax(0,1fr)]'
+      }`}
     >
       {currentPage !== 'welcome' && (
         <WalletSelectorFull open={walletOpen} onClose={() => setWalletOpen(false)} api={api} />
       )}
 
-      <header className="px-4 flex items-center justify-between border-b border-[var(--c-border)]">
+      <header className="px-4 flex items-center justify-between border-b border-[var(--c-border)] min-w-0">
 
 
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 flex items-center justify-center">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 flex items-center justify-center shrink-0">
             <img src="/icons/icon48.png" alt="Falari" className="w-8 h-8" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xs font-bold text-[var(--c-text)]">Falari</h1>
-            <div className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${chainStatus ? 'bg-green-400' : 'bg-red-400'}`} />
-              <span className="text-[10px] text-[var(--c-text-dim)]">{chainNode.label}</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${chainStatus ? 'bg-green-400' : 'bg-red-400'}`} />
+              <span className="text-[10px] text-[var(--c-text-dim)] truncate max-w-[116px]">{chainNode.label}</span>
               {chainStatus && (
-                <span className="text-[10px] text-[var(--c-text-dimmer)]">
+                <span className="text-[10px] text-[var(--c-text-dimmer)] shrink-0">
                   #{chainStatus.height?.toLocaleString()}
                 </span>
               )}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           {!isSidePanel && (
             <button
               onClick={openSidePanel}
@@ -118,7 +110,7 @@ export default function Layout({ currentPage, onNavigate, chainNode, chainStatus
           {currentPage !== 'welcome' && (
             <button
               onClick={() => setWalletOpen(true)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--c-surface)] border border-[var(--c-border)] hover:bg-[var(--c-surface-hover)] transition-colors max-w-[180px]"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--c-surface)] border border-[var(--c-border)] hover:bg-[var(--c-surface-hover)] transition-colors max-w-[160px] min-w-0"
             >
               <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-600/30 flex items-center justify-center shrink-0">
                 <svg className="w-3 h-3 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -136,12 +128,12 @@ export default function Layout({ currentPage, onNavigate, chainNode, chainStatus
         </div>
       </header>
 
-      <main className="min-h-0 overflow-y-auto scrollbar-thin px-3 py-3">
+      <main className={`min-h-0 overflow-y-auto scrollbar-thin ${currentPage === 'welcome' ? '' : 'px-3 py-3'}`}>
         {children}
       </main>
 
       {currentPage !== 'welcome' && (
-        <nav className="px-2 border-t border-[var(--c-border)] flex items-center justify-around bg-[var(--c-nav-bg)]">
+        <nav className="px-2 border-t border-[var(--c-border)] flex items-center justify-around bg-[var(--c-nav-bg)] min-w-0">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = currentPage === item.id;
@@ -156,7 +148,7 @@ export default function Layout({ currentPage, onNavigate, chainNode, chainStatus
                 }`}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium">{navLabel[item.id]}</span>
+                <span className="text-[10px] font-medium truncate max-w-[58px]">{navLabel[item.id]}</span>
               </button>
             );
           })}

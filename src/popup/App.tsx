@@ -93,7 +93,7 @@ export default function App() {
   if (!initComplete) {
     return (
       <I18nProvider>
-        <div className="w-full h-full bg-[var(--c-bg)] flex items-center justify-center">
+        <div data-theme={theme} className="w-full h-full bg-[var(--c-bg)] flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <img src="/icons/icon48.png" alt="Falari" className="w-12 h-12 animate-pulse" />
           </div>
