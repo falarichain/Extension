@@ -144,6 +144,9 @@ const zh: Locale = {
     importAddressBtn: '导入地址',
     noWallets: '暂无钱包',
     noWalletsHint: '创建你的第一个钱包或导入已有钱包',
+    addressCreated: '地址已创建',
+    cannotCreateAddressNoMnemonic: '此钱包没有助记词，无法继续派生新地址。',
+    createAddressFailed: '创建地址失败',
   },
   agentKeys: {
     title: 'Agent Key',

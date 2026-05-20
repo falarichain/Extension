@@ -72,18 +72,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setSelectedAccount: (address) => set({ selectedAccount: address }),
   addAccount: (account) => set((s) => ({ accounts: [...s.accounts, account] })),
   removeAccount: (address) =>
-    set((s) => ({
-      accounts: s.accounts.filter((a) => a.address !== address),
-      selectedAccount: s.selectedAccount === address ? null : s.selectedAccount,
-    })),
+    set((s) => {
+      const accounts = s.accounts.filter((a) => a.address !== address);
+      return {
+        accounts,
+        selectedAccount: s.selectedAccount === address
+          ? accounts[0]?.address ?? null
+          : s.selectedAccount,
+      };
+    }),
   removeWallet: (walletId) =>
-    set((s) => ({
-      wallets: s.wallets.filter((w) => w.id !== walletId),
-      accounts: s.accounts.filter((a) => a.walletId !== walletId),
-      selectedAccount: s.accounts.find((a) => a.walletId === walletId)?.address === s.selectedAccount
-        ? s.accounts.find((a) => a.walletId !== walletId)?.address ?? null
-        : s.selectedAccount,
-    })),
+    set((s) => {
+      const removedSelected = s.accounts.some(
+        (a) => a.walletId === walletId && a.address === s.selectedAccount,
+      );
+      const accounts = s.accounts.filter((a) => a.walletId !== walletId);
+      return {
+        wallets: s.wallets.filter((w) => w.id !== walletId),
+        accounts,
+        selectedAccount: removedSelected ? accounts[0]?.address ?? null : s.selectedAccount,
+      };
+    }),
   addWallet: (wallet) => set((s) => ({ wallets: [...s.wallets, wallet] })),
   renameWallet: (walletId, name) =>
     set((s) => ({

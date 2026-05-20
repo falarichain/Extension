@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useAppStore } from '@/lib/store';
-import { generateWallet, importWallet, importWalletFromMnemonic } from '@/lib/crypto';
+import { generateWallet, importWallet, importWalletFromMnemonic, normalizeAddress } from '@/lib/crypto';
 import { useI18n } from '@/lib/i18n';
 import { Key, ArrowRight, AlertCircle, Eye, EyeOff, Copy, Check, FileText, Shield, RotateCcw } from 'lucide-react';
 
@@ -22,7 +22,12 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
   const [privateKeyInput, setPrivateKeyInput] = useState('');
   const [mnemonicInput, setMnemonicInput] = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [newWallet, setNewWallet] = useState<{ address: string; privateKey: string; mnemonic: string | null } | null>(null);
+  const [newWallet, setNewWallet] = useState<{
+    address: string;
+    publicKey: string;
+    privateKey: string;
+    mnemonic: string | null;
+  } | null>(null);
   const [newWalletId, setNewWalletId] = useState('');
   const [mnemonicRevealed, setMnemonicRevealed] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -75,7 +80,7 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
     addWallet(walletGroup);
     const account = {
       address: newWallet.address,
-      publicKey: '',
+      publicKey: newWallet.publicKey,
       walletId: newWalletId,
       pathIndex: 0,
       label: `${t.welcome.walletName} #1`,
@@ -95,7 +100,7 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
     addWallet(walletGroup);
     const account = {
       address: newWallet.address,
-      publicKey: '',
+      publicKey: newWallet.publicKey,
       walletId: newWalletId,
       pathIndex: 0,
       label: `${t.welcome.walletName} #1`,
@@ -111,6 +116,13 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
     setError('');
     try {
       const wallet = importWallet(privateKeyInput.trim());
+      const exists = useAppStore.getState().accounts.some(
+        (a) => normalizeAddress(a.address) === normalizeAddress(wallet.address),
+      );
+      if (exists) {
+        setError(t.wallet.alreadyImported);
+        return;
+      }
       const walletId = generateId();
       await storePrivateKey(wallet.address, wallet.privateKey);
       const walletGroup = { id: walletId, name: t.welcome.importedWallet, createdAt: Date.now() };
@@ -136,6 +148,13 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
     setError('');
     try {
       const wallet = importWalletFromMnemonic(mnemonicInput.trim(), 0);
+      const exists = useAppStore.getState().accounts.some(
+        (a) => normalizeAddress(a.address) === normalizeAddress(wallet.address),
+      );
+      if (exists) {
+        setError(t.wallet.alreadyImported);
+        return;
+      }
       const walletId = generateId();
       await storePrivateKey(wallet.address, wallet.privateKey);
       await storeMnemonic(walletId, mnemonicInput.trim());

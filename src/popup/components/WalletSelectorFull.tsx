@@ -43,6 +43,8 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
 
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [mnemonicWalletIds, setMnemonicWalletIds] = useState<Set<string>>(new Set());
+  const [walletNotice, setWalletNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [expandedWallet, setExpandedWallet] = useState<string | null>(null);
   const [confirmDeleteWallet, setConfirmDeleteWallet] = useState<string | null>(null);
   const [confirmDeleteAddr, setConfirmDeleteAddr] = useState<string | null>(null);
@@ -57,7 +59,11 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
 
   const [createStep, setCreateStep] = useState<'mnemonic' | 'verify'>('mnemonic');
   const [newMnemonic, setNewMnemonic] = useState('');
-  const [newWalletData, setNewWalletData] = useState<{ address: string; privateKey: string } | null>(null);
+  const [newWalletData, setNewWalletData] = useState<{
+    address: string;
+    privateKey: string;
+    publicKey: string;
+  } | null>(null);
   const [mnemonicRevealed, setMnemonicRevealed] = useState(false);
   const [blankIndices, setBlankIndices] = useState<number[]>([]);
   const [verifyValues, setVerifyValues] = useState<Record<number, string>>({});
@@ -65,6 +71,7 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    setWalletNotice(null);
     const fetchBalances = async () => {
       for (const acc of accounts) {
         try {
@@ -73,9 +80,18 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
         } catch {}
       }
     };
+    const fetchMnemonicWallets = async () => {
+      const ids = new Set<string>();
+      await Promise.all(wallets.map(async (wallet) => {
+        const mnemonic = await getMnemonic(wallet.id);
+        if (mnemonic) ids.add(wallet.id);
+      }));
+      setMnemonicWalletIds(ids);
+    };
     fetchBalances();
+    fetchMnemonicWallets();
     setExpandedWallet(accounts.find((a) => a.address === selectedAccount)?.walletId || null);
-  }, [open, accounts, api, selectedAccount]);
+  }, [open, accounts, wallets, api, selectedAccount, getMnemonic]);
 
   const displayBal = (address: string) => {
     const b = balances[address];
@@ -91,9 +107,10 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
   }, [setSelectedAccount, onClose]);
 
   const handleCreateAddress = useCallback(async (walletId: string) => {
-    console.log('handleCreateAddress called for walletId:', walletId);
+    setWalletNotice(null);
     const mnemonic = await getMnemonic(walletId);
     if (!mnemonic) {
+      setWalletNotice({ type: 'error', text: t.wallet.cannotCreateAddressNoMnemonic });
       return;
     }
     const wallet = wallets.find((w) => w.id === walletId);
@@ -104,6 +121,13 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
 
     try {
       const derived = deriveAddressFromMnemonic(mnemonic, pathIndex);
+      const exists = accounts.some(
+        (a) => normalizeAddress(a.address) === normalizeAddress(derived.address),
+      );
+      if (exists) {
+        setWalletNotice({ type: 'error', text: t.wallet.alreadyImported });
+        return;
+      }
       await storePrivateKey(derived.address, derived.privateKey);
       const newAccount: WalletAccount = {
         address: derived.address,
@@ -115,12 +139,14 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
       };
       addAccount(newAccount);
       setSelectedAccount(derived.address);
+      setExpandedWallet(walletId);
+      setWalletNotice({ type: 'success', text: t.wallet.addressCreated });
       await saveState();
-      onClose();
     } catch (err) {
       console.error('Failed to create address:', err);
+      setWalletNotice({ type: 'error', text: t.wallet.createAddressFailed });
     }
-  }, [accounts, wallets, getMnemonic, storePrivateKey, addAccount, setSelectedAccount, saveState, onClose]);
+  }, [accounts, wallets, getMnemonic, storePrivateKey, addAccount, setSelectedAccount, saveState, t]);
 
   const handleDeleteAddress = useCallback(async (address: string) => {
     removeAccount(address);
@@ -154,8 +180,9 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
   const handleCreateWallet = () => {
     const wallet = generateWallet();
     setNewMnemonic(wallet.mnemonic || '');
-    setNewWalletData({ address: wallet.address, privateKey: wallet.privateKey });
+    setNewWalletData({ address: wallet.address, privateKey: wallet.privateKey, publicKey: wallet.publicKey });
     setMnemonicRevealed(false);
+    setWalletNotice(null);
     setCreateStep('mnemonic');
     setMode('create');
   };
@@ -187,9 +214,10 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
     await storeMnemonic(walletId, newMnemonic);
     const walletGroup = { id: walletId, name: `Wallet ${wallets.length + 1}`, createdAt: Date.now() };
     addWallet(walletGroup);
+    setMnemonicWalletIds((prev) => new Set(prev).add(walletId));
     const account = {
       address: newWalletData.address,
-      publicKey: '',
+      publicKey: newWalletData.publicKey,
       walletId,
       pathIndex: 0,
       label: `Wallet ${wallets.length + 1} #1`,
@@ -236,11 +264,16 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
     setImportError('');
     try {
       const wallet = importWalletFromMnemonic(importMnemonicStr.trim(), 0);
+      const exists = accounts.some(
+        (a) => normalizeAddress(a.address) === normalizeAddress(wallet.address),
+      );
+      if (exists) { setImportError(t.wallet.alreadyImported); return; }
       const walletId = generateId();
       await storePrivateKey(wallet.address, wallet.privateKey);
       await storeMnemonic(walletId, importMnemonicStr.trim());
       const walletGroup = { id: walletId, name: t.welcome.importedWallet, createdAt: Date.now() };
       addWallet(walletGroup);
+      setMnemonicWalletIds((prev) => new Set(prev).add(walletId));
       const account = {
         address: wallet.address,
         publicKey: wallet.publicKey,
@@ -276,6 +309,28 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
       </header>
 
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+        {walletNotice && (
+          <div
+            className={`flex items-start gap-2 rounded-lg border p-2.5 ${
+              walletNotice.type === 'success'
+                ? 'border-green-500/20 bg-green-500/10'
+                : 'border-red-500/20 bg-red-500/10'
+            }`}
+          >
+            {walletNotice.type === 'success' ? (
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-400" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            )}
+            <p
+              className={`text-[11px] ${
+                walletNotice.type === 'success' ? 'text-green-400' : 'text-red-400'
+              }`}
+            >
+              {walletNotice.text}
+            </p>
+          </div>
+        )}
         {mode === 'list' && (
           <>
             {grouped.size === 0 && ungrouped.length === 0 ? (
@@ -368,7 +423,9 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                           })}
                           <button
                             onClick={() => handleCreateAddress(walletId)}
-                            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] text-[var(--c-text-dim)] hover:text-[var(--c-text)] hover:bg-[var(--c-surface-hover)] transition-colors"
+                            disabled={!mnemonicWalletIds.has(walletId)}
+                            title={!mnemonicWalletIds.has(walletId) ? t.wallet.cannotCreateAddressNoMnemonic : undefined}
+                            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] text-[var(--c-text-dim)] hover:text-[var(--c-text)] hover:bg-[var(--c-surface-hover)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             {t.wallet.createAddressBtn}

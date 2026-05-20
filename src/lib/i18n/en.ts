@@ -143,6 +143,9 @@ const en = {
     importAddressBtn: 'Import Address',
     noWallets: 'No wallets yet',
     noWalletsHint: 'Create your first wallet or import an existing one',
+    addressCreated: 'Address created',
+    cannotCreateAddressNoMnemonic: 'This wallet has no recovery phrase, so new addresses cannot be derived from it.',
+    createAddressFailed: 'Failed to create address',
   },
   agentKeys: {
     title: 'Agent Keys',

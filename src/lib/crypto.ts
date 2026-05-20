@@ -2,8 +2,11 @@ import { ethers } from 'ethers';
 import { AGENT_KEY_PREFIX } from './types';
 
 export function importWalletFromMnemonic(mnemonic: string, pathIndex: number = 0): { address: string; publicKey: string; privateKey: string; pathIndex: number } {
-  const hdNode = ethers.HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(mnemonic));
-  const derived = hdNode.derivePath(`m/44'/60'/0'/0/${pathIndex}`);
+  const derived = ethers.HDNodeWallet.fromPhrase(
+    mnemonic,
+    undefined,
+    `m/44'/60'/0'/0/${pathIndex}`,
+  );
   return {
     address: derived.address,
     publicKey: derived.signingKey.publicKey,
@@ -24,8 +27,11 @@ export function generateWallet(): { address: string; publicKey: string; privateK
 }
 
 export function deriveAddressFromMnemonic(mnemonic: string, pathIndex: number): { address: string; publicKey: string; privateKey: string } {
-  const hdNode = ethers.HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(mnemonic));
-  const derived = hdNode.derivePath(`m/44'/60'/0'/0/${pathIndex}`);
+  const derived = ethers.HDNodeWallet.fromPhrase(
+    mnemonic,
+    undefined,
+    `m/44'/60'/0'/0/${pathIndex}`,
+  );
   return {
     address: derived.address,
     publicKey: derived.signingKey.publicKey,
