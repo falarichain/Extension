@@ -10,13 +10,23 @@ import {
 } from '@/lib/crypto';
 import { useI18n } from '@/lib/i18n';
 import type { WalletGroup, WalletAccount } from '@/lib/types';
-import { X, Plus, Download, Copy, Check, Trash2, Wallet, ChevronRight, ChevronDown, Eye, EyeOff, Key, Shield, AlertCircle, RotateCcw } from 'lucide-react';
+import { X, Plus, Download, Copy, Check, Trash2, Wallet, ChevronRight, ChevronDown, Eye, EyeOff, Key, Shield, AlertCircle, RotateCcw, Pencil } from 'lucide-react';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   api: ChainApi;
 }
+
+type EditingName =
+  | { type: 'wallet'; id: string; value: string }
+  | { type: 'account'; id: string; value: string }
+  | null;
+
+type SecretRequest =
+  | { type: 'mnemonic'; walletId: string }
+  | { type: 'privateKey'; address: string }
+  | null;
 
 function generateId(): string {
   return `wallet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -35,16 +45,31 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
   const removeAccount = useAppStore((s) => s.removeAccount);
   const addWallet = useAppStore((s) => s.addWallet);
   const removeWallet = useAppStore((s) => s.removeWallet);
+  const renameWallet = useAppStore((s) => s.renameWallet);
+  const renameAccount = useAppStore((s) => s.renameAccount);
   const setSelectedAccount = useAppStore((s) => s.setSelectedAccount);
   const storePrivateKey = useAppStore((s) => s.storePrivateKey);
+  const getPrivateKey = useAppStore((s) => s.getPrivateKey);
   const storeMnemonic = useAppStore((s) => s.storeMnemonic);
   const getMnemonic = useAppStore((s) => s.getMnemonic);
+  const verifyPassword = useAppStore((s) => s.verifyPassword);
   const saveState = useAppStore((s) => s.saveState);
 
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [mnemonicWalletIds, setMnemonicWalletIds] = useState<Set<string>>(new Set());
   const [walletNotice, setWalletNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [backupMnemonicWalletId, setBackupMnemonicWalletId] = useState<string | null>(null);
+  const [backupMnemonic, setBackupMnemonic] = useState('');
+  const [visiblePrivateKeyAddress, setVisiblePrivateKeyAddress] = useState<string | null>(null);
+  const [exportedPrivateKeys, setExportedPrivateKeys] = useState<Record<string, string>>({});
+  const [copiedSecret, setCopiedSecret] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<EditingName>(null);
+  const [renameError, setRenameError] = useState('');
+  const [secretRequest, setSecretRequest] = useState<SecretRequest>(null);
+  const [secretPassword, setSecretPassword] = useState('');
+  const [secretPasswordError, setSecretPasswordError] = useState('');
+  const [secretPasswordLoading, setSecretPasswordLoading] = useState(false);
   const [expandedWallet, setExpandedWallet] = useState<string | null>(null);
   const [confirmDeleteWallet, setConfirmDeleteWallet] = useState<string | null>(null);
   const [confirmDeleteAddr, setConfirmDeleteAddr] = useState<string | null>(null);
@@ -72,6 +97,19 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
   useEffect(() => {
     if (!open) return;
     setWalletNotice(null);
+    setCopiedSecret(null);
+    setBackupMnemonicWalletId(null);
+    setBackupMnemonic('');
+    setVisiblePrivateKeyAddress(null);
+    setEditingName(null);
+    setRenameError('');
+    setSecretRequest(null);
+    setSecretPassword('');
+    setSecretPasswordError('');
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const fetchBalances = async () => {
       for (const acc of accounts) {
         try {
@@ -176,6 +214,124 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
       setTimeout(() => setCopiedAddress(null), 2000);
     }
   }, []);
+
+  const handleCopySecret = useCallback(async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    setCopiedSecret(key);
+    setTimeout(() => setCopiedSecret(null), 2000);
+  }, []);
+
+  const handleStartRenameWallet = useCallback((wallet: WalletGroup) => {
+    setEditingName({ type: 'wallet', id: wallet.id, value: wallet.name });
+    setRenameError('');
+  }, []);
+
+  const handleStartRenameAccount = useCallback((account: WalletAccount) => {
+    setEditingName({ type: 'account', id: account.address, value: account.label || truncateAddress(account.address) });
+    setRenameError('');
+  }, []);
+
+  const handleSaveRename = useCallback(async () => {
+    if (!editingName) return;
+    const name = editingName.value.trim();
+    if (!name) {
+      setRenameError(t.wallet.nameRequired);
+      return;
+    }
+
+    if (editingName.type === 'wallet') {
+      renameWallet(editingName.id, name);
+    } else {
+      renameAccount(editingName.id, name);
+    }
+    await saveState();
+    setEditingName(null);
+    setRenameError('');
+  }, [editingName, renameWallet, renameAccount, saveState, t]);
+
+  const closeSecretPassword = useCallback(() => {
+    setSecretRequest(null);
+    setSecretPassword('');
+    setSecretPasswordError('');
+    setSecretPasswordLoading(false);
+  }, []);
+
+  const handleBackupMnemonic = useCallback(async (walletId: string) => {
+    setWalletNotice(null);
+    if (backupMnemonicWalletId === walletId) {
+      setBackupMnemonicWalletId(null);
+      setBackupMnemonic('');
+      return;
+    }
+
+    setSecretRequest({ type: 'mnemonic', walletId });
+    setSecretPassword('');
+    setSecretPasswordError('');
+  }, [backupMnemonicWalletId]);
+
+  const handleExportPrivateKey = useCallback(async (address: string) => {
+    setWalletNotice(null);
+    if (visiblePrivateKeyAddress === address) {
+      setVisiblePrivateKeyAddress(null);
+      return;
+    }
+
+    setSecretRequest({ type: 'privateKey', address });
+    setSecretPassword('');
+    setSecretPasswordError('');
+  }, [visiblePrivateKeyAddress]);
+
+  const handleConfirmSecretPassword = useCallback(async () => {
+    if (!secretRequest) return;
+    if (!secretPassword.trim()) {
+      setSecretPasswordError(t.lockscreen.passwordRequired);
+      return;
+    }
+
+    try {
+      setSecretPasswordLoading(true);
+      const ok = await verifyPassword(secretPassword);
+      if (!ok) {
+        setSecretPasswordError(t.wallet.wrongPassword);
+        return;
+      }
+
+      if (secretRequest.type === 'mnemonic') {
+        const mnemonic = await getMnemonic(secretRequest.walletId);
+        if (!mnemonic) {
+          setWalletNotice({ type: 'error', text: t.wallet.noMnemonicStored });
+          closeSecretPassword();
+          return;
+        }
+        setBackupMnemonicWalletId(secretRequest.walletId);
+        setBackupMnemonic(mnemonic);
+      } else {
+        const privateKey = await getPrivateKey(secretRequest.address);
+        if (!privateKey) {
+          setWalletNotice({ type: 'error', text: t.wallet.privateKeyNotFound });
+          closeSecretPassword();
+          return;
+        }
+        setExportedPrivateKeys((prev) => ({ ...prev, [secretRequest.address]: privateKey }));
+        setVisiblePrivateKeyAddress(secretRequest.address);
+      }
+
+      closeSecretPassword();
+    } catch {
+      setSecretPasswordError(t.lockscreen.error);
+    } finally {
+      setSecretPasswordLoading(false);
+    }
+  }, [closeSecretPassword, getMnemonic, getPrivateKey, secretPassword, secretRequest, t, verifyPassword]);
 
   const handleCreateWallet = () => {
     const wallet = generateWallet();
@@ -300,8 +456,8 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
   const ungrouped = accounts.filter((a) => !wallets.some((w) => w.id === a.walletId));
 
   return (
-    <div className="absolute inset-0 z-50 bg-[var(--c-bg)] flex flex-col">
-      <header className="h-14 px-4 flex items-center justify-between border-b border-[var(--c-border)] shrink-0">
+    <div className="app-shell absolute inset-0 z-50 bg-[var(--c-bg)] flex flex-col">
+      <header className="app-header h-14 px-4 flex items-center justify-between border-b border-[var(--c-border)] shrink-0">
         <h2 className="text-sm font-bold text-[var(--c-text)]">{t.wallet.manageWallets}</h2>
         <button onClick={onClose} className="w-8 h-8 rounded-lg bg-[var(--c-surface)] border border-[var(--c-border)] flex items-center justify-center hover:bg-[var(--c-surface-hover)]">
           <X className="w-4 h-4 text-[var(--c-text)]" />
@@ -335,7 +491,9 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
           <>
             {grouped.size === 0 && ungrouped.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-4">
-                <Wallet className="w-12 h-12 text-[var(--c-text-dimmer)]" />
+                <div className="icon-tile icon-tile-blue h-14 w-14">
+                  <Wallet className="h-7 w-7" strokeWidth={2.5} />
+                </div>
                 <p className="text-[13px] font-semibold text-[var(--c-text)]">{t.wallet.noWallets}</p>
                 <p className="text-[11px] text-[var(--c-text-dim)] text-center">{t.wallet.noWalletsHint}</p>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -359,14 +517,70 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                         onClick={() => setExpandedWallet(expanded ? null : walletId)}
                       >
                         {expanded ? <ChevronDown className="w-4 h-4 text-[var(--c-text-dim)]" /> : <ChevronRight className="w-4 h-4 text-[var(--c-text-dim)]" />}
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center">
-                          <Wallet className="w-4 h-4 text-blue-400" />
+                        <div className="icon-tile icon-tile-blue w-8 h-8">
+                          <Wallet className="w-4 h-4" strokeWidth={2.5} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-[var(--c-text)]">{w.name}</p>
-                          <p className="text-[11px] text-[var(--c-text-dim)]">{addrs.length} {addrs.length === 1 ? 'address' : 'addresses'}</p>
+                          {editingName?.type === 'wallet' && editingName.id === walletId ? (
+                            <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  className="input-field min-w-0 py-1.5 text-[12px]"
+                                  placeholder={t.wallet.walletNamePlaceholder}
+                                  value={editingName.value}
+                                  autoFocus
+                                  onChange={(e) => {
+                                    setEditingName({ ...editingName, value: e.target.value });
+                                    setRenameError('');
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveRename();
+                                    if (e.key === 'Escape') setEditingName(null);
+                                  }}
+                                />
+                                <button onClick={handleSaveRename} className="h-8 w-8 shrink-0 rounded-lg bg-green-500/15 text-green-300 hover:bg-green-500/25" title={t.wallet.saveName}>
+                                  <Check className="mx-auto h-4 w-4" />
+                                </button>
+                                <button onClick={() => setEditingName(null)} className="h-8 w-8 shrink-0 rounded-lg bg-white/[0.06] text-[var(--c-text-dim)] hover:bg-white/[0.1]">
+                                  <X className="mx-auto h-4 w-4" />
+                                </button>
+                              </div>
+                              {renameError && <p className="text-[10px] text-red-300">{renameError}</p>}
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm font-semibold text-[var(--c-text)] truncate">{w.name}</p>
+                              <p className="text-[11px] text-[var(--c-text-dim)]">{addrs.length} {addrs.length === 1 ? 'address' : 'addresses'}</p>
+                            </>
+                          )}
                         </div>
                         <div className="flex gap-1 shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartRenameWallet(w);
+                            }}
+                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-blue-500/10 text-[var(--c-text-dimmer)] hover:text-blue-400"
+                            title={t.wallet.rename}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          {mnemonicWalletIds.has(walletId) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBackupMnemonic(walletId);
+                              }}
+                              className="w-6 h-6 rounded flex items-center justify-center hover:bg-blue-500/10 text-[var(--c-text-dimmer)] hover:text-blue-400"
+                              title={t.wallet.backupMnemonic}
+                            >
+                              {backupMnemonicWalletId === walletId ? (
+                                <EyeOff className="w-3.5 h-3.5" />
+                              ) : (
+                                <Shield className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          )}
                           {isDeleting ? (
                             <>
                               <button onClick={(e) => { e.stopPropagation(); handleDeleteWallet(walletId); }} className="px-2 py-1 rounded text-[10px] bg-red-500/20 text-red-400">Confirm</button>
@@ -382,6 +596,37 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
 
                       {expanded && (
                         <div className="border-t border-[var(--c-border)]">
+                          {backupMnemonicWalletId === walletId && backupMnemonic && (
+                            <div className="border-b border-[var(--c-border)] p-3">
+                              <div className="mb-2 flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-semibold text-[var(--c-text)]">
+                                  {t.wallet.backupMnemonic}
+                                </span>
+                                <button
+                                  onClick={() => handleCopySecret(backupMnemonic, `mnemonic-${walletId}`)}
+                                  className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-[var(--c-text-dim)] hover:bg-[var(--c-surface-hover)] hover:text-[var(--c-text)]"
+                                >
+                                  {copiedSecret === `mnemonic-${walletId}` ? (
+                                    <Check className="h-3 w-3 text-green-400" />
+                                  ) : (
+                                    <Copy className="h-3 w-3" />
+                                  )}
+                                  {copiedSecret === `mnemonic-${walletId}` ? t.wallet.copiedSecret : t.dashboard.copyAddress}
+                                </button>
+                              </div>
+                              <div className="recovery-grid rounded-lg border border-red-500/20 bg-red-500/10 p-2">
+                                {backupMnemonic.split(' ').map((word, i) => (
+                                  <div key={`${word}-${i}`} className="flex min-w-0 items-center gap-1.5">
+                                    <span className="w-4 text-right text-[10px] text-red-300/80">{i + 1}</span>
+                                    <span className="truncate text-xs text-red-300">{word}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <p className="mt-2 text-[10px] leading-relaxed text-red-300/80">
+                                {t.wallet.backupWarning}
+                              </p>
+                            </div>
+                          )}
                           {addrs.map((account) => {
                             const isSelected = selectedAccount === account.address;
                             const isDeletingAddr = confirmDeleteAddr === account.address;
@@ -392,8 +637,50 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                                   onClick={() => handleSelectAccount(account.address)}
                                 >
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] font-medium text-[var(--c-text)] truncate">{account.label}</p>
-                                    <p className="text-[10px] text-[var(--c-text-dimmer)] truncate">{truncateAddress(account.address)}</p>
+                                    {editingName?.type === 'account' && editingName.id === account.address ? (
+                                      <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            className="input-field min-w-0 py-1.5 text-[11px]"
+                                            placeholder={t.wallet.addressNamePlaceholder}
+                                            value={editingName.value}
+                                            autoFocus
+                                            onChange={(e) => {
+                                              setEditingName({ ...editingName, value: e.target.value });
+                                              setRenameError('');
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') handleSaveRename();
+                                              if (e.key === 'Escape') setEditingName(null);
+                                            }}
+                                          />
+                                          <button onClick={handleSaveRename} className="h-7 w-7 shrink-0 rounded-lg bg-green-500/15 text-green-300 hover:bg-green-500/25" title={t.wallet.saveName}>
+                                            <Check className="mx-auto h-3.5 w-3.5" />
+                                          </button>
+                                          <button onClick={() => setEditingName(null)} className="h-7 w-7 shrink-0 rounded-lg bg-white/[0.06] text-[var(--c-text-dim)] hover:bg-white/[0.1]">
+                                            <X className="mx-auto h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                        {renameError && <p className="text-[10px] text-red-300">{renameError}</p>}
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <div className="flex items-center gap-1 min-w-0">
+                                          <p className="text-[11px] font-medium text-[var(--c-text)] truncate">{account.label}</p>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleStartRenameAccount(account);
+                                            }}
+                                            className="h-5 w-5 shrink-0 rounded text-[var(--c-text-dimmer)] hover:bg-blue-500/10 hover:text-blue-400"
+                                            title={t.wallet.rename}
+                                          >
+                                            <Pencil className="mx-auto h-3 w-3" />
+                                          </button>
+                                        </div>
+                                        <p className="text-[10px] text-[var(--c-text-dimmer)] truncate">{truncateAddress(account.address)}</p>
+                                      </>
+                                    )}
                                   </div>
                                   <span className="text-[10px] text-[var(--c-text-dim)] tabular-nums">{displayBal(account.address)} FAI</span>
                                   {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />}
@@ -403,6 +690,20 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                                     <button onClick={(e) => { e.stopPropagation(); handleCopyAddress(account.address); }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-[var(--c-text-dim)] hover:text-[var(--c-text)] hover:bg-[var(--c-surface-hover)]">
                                       {copiedAddress === account.address ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                                       {copiedAddress === account.address ? t.dashboard.copied : t.dashboard.copyAddress}
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleExportPrivateKey(account.address);
+                                      }}
+                                      className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-[var(--c-text-dim)] hover:bg-[var(--c-surface-hover)] hover:text-[var(--c-text)]"
+                                    >
+                                      {visiblePrivateKeyAddress === account.address ? (
+                                        <EyeOff className="h-3 w-3" />
+                                      ) : (
+                                        <Key className="h-3 w-3" />
+                                      )}
+                                      {visiblePrivateKeyAddress === account.address ? t.wallet.hideSecret : t.wallet.exportPrivateKey}
                                     </button>
                                     {isDeletingAddr ? (
                                       <div className="flex gap-1 ml-auto">
@@ -416,6 +717,37 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                                         </button>
                                       )
                                     )}
+                                  </div>
+                                )}
+                                {visiblePrivateKeyAddress === account.address && exportedPrivateKeys[account.address] && (
+                                  <div className="px-2 pb-2 pl-8">
+                                    <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-2">
+                                      <div className="mb-1 flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-semibold text-red-300">
+                                          {t.wallet.exportPrivateKey}
+                                        </span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCopySecret(exportedPrivateKeys[account.address], `pk-${account.address}`);
+                                          }}
+                                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-red-300/80 hover:bg-red-500/10 hover:text-red-300"
+                                        >
+                                          {copiedSecret === `pk-${account.address}` ? (
+                                            <Check className="h-3 w-3 text-green-400" />
+                                          ) : (
+                                            <Copy className="h-3 w-3" />
+                                          )}
+                                          {copiedSecret === `pk-${account.address}` ? t.wallet.copiedSecret : t.dashboard.copyAddress}
+                                        </button>
+                                      </div>
+                                      <code className="block break-all text-[10px] leading-relaxed text-red-300">
+                                        {exportedPrivateKeys[account.address]}
+                                      </code>
+                                      <p className="mt-1 text-[10px] leading-relaxed text-red-300/80">
+                                        {t.wallet.backupWarning}
+                                      </p>
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -452,8 +784,50 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                       {addrs.map((account) => (
                         <div key={account.address} className="border-t border-[var(--c-border)] p-2.5 flex items-center gap-2 cursor-pointer hover:bg-[var(--c-surface-hover)]" onClick={() => handleSelectAccount(account.address)}>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-medium text-[var(--c-text)] truncate">{account.label}</p>
-                            <p className="text-[11px] text-[var(--c-text-dimmer)] truncate">{truncateAddress(account.address)}</p>
+                            {editingName?.type === 'account' && editingName.id === account.address ? (
+                              <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    className="input-field min-w-0 py-1.5 text-[11px]"
+                                    placeholder={t.wallet.addressNamePlaceholder}
+                                    value={editingName.value}
+                                    autoFocus
+                                    onChange={(e) => {
+                                      setEditingName({ ...editingName, value: e.target.value });
+                                      setRenameError('');
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveRename();
+                                      if (e.key === 'Escape') setEditingName(null);
+                                    }}
+                                  />
+                                  <button onClick={handleSaveRename} className="h-7 w-7 shrink-0 rounded-lg bg-green-500/15 text-green-300 hover:bg-green-500/25" title={t.wallet.saveName}>
+                                    <Check className="mx-auto h-3.5 w-3.5" />
+                                  </button>
+                                  <button onClick={() => setEditingName(null)} className="h-7 w-7 shrink-0 rounded-lg bg-white/[0.06] text-[var(--c-text-dim)] hover:bg-white/[0.1]">
+                                    <X className="mx-auto h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                {renameError && <p className="text-[10px] text-red-300">{renameError}</p>}
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <p className="text-[12px] font-medium text-[var(--c-text)] truncate">{account.label}</p>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartRenameAccount(account);
+                                    }}
+                                    className="h-5 w-5 shrink-0 rounded text-[var(--c-text-dimmer)] hover:bg-blue-500/10 hover:text-blue-400"
+                                    title={t.wallet.rename}
+                                  >
+                                    <Pencil className="mx-auto h-3 w-3" />
+                                  </button>
+                                </div>
+                                <p className="text-[11px] text-[var(--c-text-dimmer)] truncate">{truncateAddress(account.address)}</p>
+                              </>
+                            )}
                           </div>
                           <span className="text-[11px] text-[var(--c-text-dim)]">{displayBal(account.address)} FAI</span>
                         </div>
@@ -598,6 +972,59 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
           </div>
         )}
       </div>
+      {secretRequest && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
+          <div className="glass-card w-full max-w-[320px] p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="icon-tile icon-tile-red h-8 w-8">
+                  <Shield className="h-4 w-4" strokeWidth={2.5} />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-[var(--c-text)]">{t.wallet.confirmPasswordTitle}</p>
+                  <p className="text-[11px] text-[var(--c-text-dim)]">
+                    {secretRequest.type === 'mnemonic' ? t.wallet.backupMnemonic : t.wallet.exportPrivateKey}
+                  </p>
+                </div>
+              </div>
+              <button onClick={closeSecretPassword} className="h-8 w-8 rounded-lg bg-[var(--c-surface)] text-[var(--c-text-dim)] hover:bg-[var(--c-surface-hover)]">
+                <X className="mx-auto h-4 w-4" />
+              </button>
+            </div>
+            <p className="mb-3 text-xs leading-relaxed text-[var(--c-text-dim)]">{t.wallet.confirmPasswordHint}</p>
+            <input
+              className="input-field"
+              type="password"
+              placeholder={t.lockscreen.passwordPlaceholder}
+              value={secretPassword}
+              autoFocus
+              onChange={(e) => {
+                setSecretPassword(e.target.value);
+                setSecretPasswordError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmSecretPassword();
+                if (e.key === 'Escape') closeSecretPassword();
+              }}
+            />
+            {secretPasswordError && (
+              <p className="mt-2 text-xs text-red-300">{secretPasswordError}</p>
+            )}
+            <div className="mt-4 flex gap-2">
+              <button onClick={closeSecretPassword} className="btn-secondary flex-1 py-2.5 text-[12px]">
+                {t.wallet.cancel}
+              </button>
+              <button
+                onClick={handleConfirmSecretPassword}
+                disabled={secretPasswordLoading}
+                className="btn-primary flex-1 py-2.5 text-[12px]"
+              >
+                {secretPasswordLoading ? t.dashboard.sending : t.wallet.confirmPasswordBtn}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

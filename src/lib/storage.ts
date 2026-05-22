@@ -5,7 +5,11 @@ import {
   merkleRoot,
   bytesToBase64,
 } from './erasure';
-import { sha256 } from './crypto';
+import { sha256, stripHexPrefix } from './crypto';
+
+function sha256Hex(data: Uint8Array): string {
+  return stripHexPrefix(sha256(data));
+}
 
 export interface UploadProgress {
   stage: 'init' | 'erasure' | 'uploading' | 'committing' | 'finalizing' | 'done' | 'error';
@@ -80,9 +84,8 @@ export async function uploadFile(
     const shardCIDs: string[] = [];
 
     for (let i = 0; i < shards.length; i++) {
-      const hash = sha256(shards[i]);
+      const hash = sha256Hex(shards[i]);
       shardHashes.push(hash);
-      shardCIDs.push(computeRawCID(shards[i]));
       allShards.push({ segmentId: segId, shardIndex: i, data: shards[i], hash });
     }
 
@@ -154,9 +157,9 @@ export async function uploadFile(
           shardIndex: shard.shardIndex,
           shardId: `${intentId}_${shard.segmentId}_${shard.shardIndex}`,
           shardHash: shard.hash,
-          shardCID: computeRawCID(shard.data),
+          shardCID: assignment.shardCID || assignment.shard_cid || '',
           shardSize: shard.data.length,
-          policyHash: sha256(new TextEncoder().encode(JSON.stringify({ class: 'standard', duration, redundancy: 'erasure' }))),
+          policyHash: sha256Hex(new TextEncoder().encode(JSON.stringify({ class: 'standard', duration, redundancy: 'erasure' }))),
           dataBase64: bytesToBase64(shard.data),
         },
         assignment.endpoint || assignment.minerEndpoint,
@@ -177,9 +180,9 @@ export async function uploadFile(
         shardIndex: shard.shardIndex,
         shardId: `${intentId}_${shard.segmentId}_${shard.shardIndex}`,
         shardHash: shard.hash,
-        shardCID: computeRawCID(shard.data),
+        shardCID: assignment.shardCID || assignment.shard_cid || '',
         shardSize: shard.data.length,
-        sectorCommitment: sha256(shard.data),
+        sectorCommitment: sha256Hex(shard.data),
         expiresAtUnix: deadline,
         minerEndpoint: assignment.endpoint || assignment.minerEndpoint,
         signature: '',
@@ -213,7 +216,7 @@ export async function uploadFile(
   const finalizeResp = await api.finalize({
     intentId,
     user,
-    manifestRoot: sha256(new TextEncoder().encode(intentId)),
+    manifestRoot: sha256Hex(new TextEncoder().encode(intentId)),
   });
 
   report({ stage: 'done', intentId, dealId: finalizeResp.dealId });
@@ -307,8 +310,4 @@ function decodeShardsFromDownload(
   }
 
   return result;
-}
-
-function computeRawCID(data: Uint8Array): string {
-  return sha256(data);
 }

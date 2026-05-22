@@ -1,4 +1,4 @@
-import type { ChainStatus, StorageIntentView, StorageUploadPlan } from './types';
+import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan } from './types';
 
 const DEFAULT_TIMEOUT = 60000;
 
@@ -40,6 +40,29 @@ async function request<T>(
   }
 }
 
+function toWireKey(key: string): string {
+  const normalized = key
+    .replace(/CIDs/g, 'Cids')
+    .replace(/CID/g, 'Cid')
+    .replace(/ID/g, 'Id');
+  return normalized.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+}
+
+function toWirePayload(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => toWirePayload(item));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      toWireKey(key),
+      toWirePayload(entry),
+    ]),
+  );
+}
+
 export class ChainApi {
   private baseUrl: string;
 
@@ -56,7 +79,7 @@ export class ChainApi {
   }
 
   async getBalance(address: string): Promise<{ balance: number; nonce: number }> {
-    return request(this.baseUrl, `/accounts/?address=${address}`);
+    return request(this.baseUrl, `/accounts/${encodeURIComponent(address)}`);
   }
 
   async getAccount(address: string): Promise<{
@@ -66,7 +89,7 @@ export class ChainApi {
     lockedStake: number;
     lockedStorage: number;
   }> {
-    return request(this.baseUrl, `/accounts/?address=${address}`);
+    return request(this.baseUrl, `/accounts/${encodeURIComponent(address)}`);
   }
 
   async faucet(address: string, amount: number): Promise<{ account: { address: string; balance: number } }> {
@@ -87,7 +110,7 @@ export class ChainApi {
   }): Promise<{ from: { address: string; balance: number }; to: { address: string; balance: number } }> {
     return request(this.baseUrl, '/transfer', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 
@@ -125,7 +148,7 @@ export class ChainApi {
   }): Promise<{ intentId: string; status: string; requiredFee: number; assignments: any[] }> {
     return request(this.baseUrl, '/intents', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 
@@ -145,7 +168,7 @@ export class ChainApi {
   }, minerEndpoint: string): Promise<any> {
     return request(minerEndpoint, '/upload', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 
@@ -174,7 +197,7 @@ export class ChainApi {
   }): Promise<{ intentId: string; status: string; committedSegments: number }> {
     return request(this.baseUrl, '/batch-commits', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 
@@ -185,7 +208,18 @@ export class ChainApi {
   }): Promise<{ intentId: string; dealId: string; status: string }> {
     return request(this.baseUrl, '/finalize', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async topUpPermanentFund(payload: {
+    intentId: string;
+    user: string;
+    amount: number;
+  }): Promise<{ fund: any }> {
+    return request(this.baseUrl, '/intents/permanent-fund', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 
@@ -204,6 +238,93 @@ export class ChainApi {
     return request(this.baseUrl, `/manifests/${intentId}`);
   }
 
+  async createKeyEnvelope(payload: {
+    intentId: string;
+    owner: string;
+    recipient: string;
+    recipientType: 'owner' | 'address' | 'agent' | 'passcode';
+    algorithm: string;
+    encryptedDataKey: string;
+    nonce?: string;
+    kdf?: any;
+    expiresAtUnix?: number;
+  }): Promise<{ envelope: KeyEnvelope }> {
+    return request(this.baseUrl, '/key-envelopes', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async listKeyEnvelopes(params: {
+    intentId?: string;
+    recipient?: string;
+    recipientType?: string;
+    shareId?: string;
+    includeRevoked?: boolean;
+  }): Promise<{ envelopes: KeyEnvelope[] }> {
+    const query = new URLSearchParams();
+    if (params.intentId) query.set('intent_id', params.intentId);
+    if (params.recipient) query.set('recipient', params.recipient);
+    if (params.recipientType) query.set('recipient_type', params.recipientType);
+    if (params.shareId) query.set('share_id', params.shareId);
+    if (params.includeRevoked) query.set('include_revoked', 'true');
+    return request(this.baseUrl, `/key-envelopes?${query.toString()}`);
+  }
+
+  async createAddressShare(payload: {
+    intentId: string;
+    owner: string;
+    recipient: string;
+    algorithm: string;
+    encryptedDataKey: string;
+    nonce?: string;
+    expiresAtUnix?: number;
+  }): Promise<{ share: ShareRecord; envelope: KeyEnvelope }> {
+    return request(this.baseUrl, '/shares/address', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async createPasscodeShare(payload: {
+    intentId: string;
+    owner: string;
+    mode?: 'passcode' | 'link_fragment';
+    algorithm: string;
+    encryptedDataKey: string;
+    nonce?: string;
+    kdf: any;
+    expiresAtUnix?: number;
+  }): Promise<{ share: ShareRecord; envelope: KeyEnvelope }> {
+    return request(this.baseUrl, '/shares/passcode', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async revokeShare(payload: { shareId: string; owner: string }): Promise<void> {
+    return request(this.baseUrl, '/shares/revoke', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async listShares(params: {
+    intentId?: string;
+    owner?: string;
+    recipient?: string;
+    shareId?: string;
+    includeRevoked?: boolean;
+  }): Promise<{ shares: ShareRecord[]; envelopes?: KeyEnvelope[] }> {
+    const query = new URLSearchParams();
+    if (params.intentId) query.set('intent_id', params.intentId);
+    if (params.owner) query.set('owner', params.owner);
+    if (params.recipient) query.set('recipient', params.recipient);
+    if (params.shareId) query.set('share_id', params.shareId);
+    if (params.includeRevoked) query.set('include_revoked', 'true');
+    return request(this.baseUrl, `/shares?${query.toString()}`);
+  }
+
   async registerAgentKey(payload: {
     master: string;
     name: string;
@@ -216,7 +337,7 @@ export class ChainApi {
   }): Promise<{ key: any }> {
     return request(this.baseUrl, '/agent-keys', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 
@@ -232,7 +353,7 @@ export class ChainApi {
   }): Promise<void> {
     return request(this.baseUrl, '/agent-keys/revoke', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 
@@ -243,7 +364,7 @@ export class ChainApi {
   }): Promise<{ pricing: any; requiredFee: number }> {
     return request(this.baseUrl, '/storage/quote', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 

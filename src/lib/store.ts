@@ -42,6 +42,7 @@ interface AppStore {
   addWallet: (wallet: WalletGroup) => void;
   removeWallet: (walletId: string) => void;
   renameWallet: (walletId: string, name: string) => void;
+  renameAccount: (address: string, label: string) => void;
 
   hasPassword: () => Promise<boolean>;
   setPassword: (password: string) => Promise<void>;
@@ -98,6 +99,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((s) => ({
       wallets: s.wallets.map((w) => (w.id === walletId ? { ...w, name } : w)),
     })),
+  renameAccount: (address, label) =>
+    set((s) => ({
+      accounts: s.accounts.map((a) => (a.address === address ? { ...a, label } : a)),
+    })),
 
   setAgentKeys: (agentKeys) => set({ agentKeys }),
   addAgentKey: (key) => set((s) => ({ agentKeys: [...s.agentKeys, key] })),
@@ -134,11 +139,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
           agentKeys: state.agentKeys || [],
           chainNode: state.chainNode || { url: 'http://localhost:8080', label: 'Local Devnet' },
           isLocked: true,
-          stateLoaded: true,
         });
       }
     } catch (err) {
       console.error('Failed to load wallet state:', err);
+    } finally {
       set({ stateLoaded: true });
     }
   },

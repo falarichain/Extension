@@ -3,6 +3,7 @@ import { useAppStore } from '@/lib/store';
 import { generateWallet, importWallet, importWalletFromMnemonic, normalizeAddress } from '@/lib/crypto';
 import { useI18n } from '@/lib/i18n';
 import { Key, ArrowRight, AlertCircle, Eye, EyeOff, Copy, Check, FileText, Shield, RotateCcw } from 'lucide-react';
+import { extensionAssetUrl } from '@/lib/extensionAssets';
 
 function generateId(): string {
   return `wallet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -74,22 +75,26 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
         return;
       }
     }
-    await storePrivateKey(newWallet.address, newWallet.privateKey);
-    await storeMnemonic(newWalletId, newWallet.mnemonic);
-    const walletGroup = { id: newWalletId, name: t.welcome.walletName, createdAt: Date.now() };
-    addWallet(walletGroup);
-    const account = {
-      address: newWallet.address,
-      publicKey: newWallet.publicKey,
-      walletId: newWalletId,
-      pathIndex: 0,
-      label: `${t.welcome.walletName} #1`,
-      createdAt: Date.now(),
-    };
-    addAccount(account);
-    setSelectedAccount(newWallet.address);
-    await saveState();
-    onWalletCreated();
+    try {
+      await storePrivateKey(newWallet.address, newWallet.privateKey);
+      await storeMnemonic(newWalletId, newWallet.mnemonic);
+      const walletGroup = { id: newWalletId, name: t.welcome.walletName, createdAt: Date.now() };
+      addWallet(walletGroup);
+      const account = {
+        address: newWallet.address,
+        publicKey: newWallet.publicKey,
+        walletId: newWalletId,
+        pathIndex: 0,
+        label: `${t.welcome.walletName} #1`,
+        createdAt: Date.now(),
+      };
+      addAccount(account);
+      setSelectedAccount(newWallet.address);
+      await saveState();
+      onWalletCreated();
+    } catch {
+      setVerifyError(t.lockscreen.error);
+    }
   };
 
   const handleSkipMnemonic = async () => {
@@ -187,7 +192,7 @@ export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () =
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 px-6 py-10">
         <div className="mb-2">
-          <img src="/icons/icon128.png" alt="Falari" className="w-16 h-16 animate-pulse-slow" />
+          <img src={extensionAssetUrl('icons/icon128.png')} alt="Falari" className="w-16 h-16 animate-pulse-slow" />
         </div>
         <h2 className="text-xl font-bold text-white text-center">{t.welcome.title1}</h2>
         <h1 className="text-2xl font-bold gradient-text text-center">{t.welcome.title2}</h1>

@@ -5,6 +5,7 @@ chrome.runtime.onInstalled.addListener(() => {
         falari_wallet_state: {
           accounts: [],
           selectedAccount: null,
+          wallets: [],
           agentKeys: [],
           chainNode: {
             url: 'http://localhost:8080',

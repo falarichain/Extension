@@ -51,8 +51,10 @@ function StatCard({ icon: Icon, label, value, suffix }: {
 }) {
   return (
     <div className="glass-card p-3 flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5 text-[var(--c-text-dim)]">
-        <Icon className="w-4 h-4" />
+      <div className="flex items-center gap-2 text-[var(--c-text-dim)]">
+        <span className="icon-tile h-7 w-7">
+          <Icon className="h-4 w-4" strokeWidth={2.4} />
+        </span>
         <span className="text-xs font-semibold">{label}</span>
       </div>
       <div className="flex items-baseline gap-0.5">
@@ -107,7 +109,12 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
     }
   }, [showReceive, account]);
 
-  const connected = chainStatus !== null;
+  const connected = Boolean(
+    chainStatus &&
+      typeof chainStatus.height === 'number' &&
+      chainStatus.feeMarket &&
+      chainStatus.storagePricing,
+  );
 
   const handleSend = useCallback(async () => {
     setSendError(''); setSendSuccess('');
@@ -158,16 +165,16 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
           <div className="flex items-center gap-1.5 text-xs text-[var(--c-text-dim)]">
             <Layers className="w-4 h-4" />
             <span>{t.dashboard.height}</span>
-            <span className="text-[var(--c-text)] font-semibold tabular-nums">#{chainStatus.height.toLocaleString()}</span>
+            <span className="text-[var(--c-text)] font-semibold tabular-nums">#{chainStatus.height?.toLocaleString() ?? '—'}</span>
           </div>
         )}
       </div>
 
-      <div className="glass-card p-4 flex flex-col gap-3">
+      <div className="glass-card balance-card p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 border border-white/[0.06] flex items-center justify-center">
-              <Wallet className="w-5 h-5 text-blue-400" />
+            <div className="icon-tile icon-tile-blue w-11 h-11">
+              <Wallet className="w-5 h-5" strokeWidth={2.5} />
             </div>
             <div>
               <p className="text-xs text-[var(--c-text-dim)]">{t.dashboard.balance}</p>
@@ -175,7 +182,7 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
             </div>
           </div>
           <button onClick={fetchBalance} disabled={loading} className="w-8 h-8 rounded-lg border border-white/[0.06] bg-white/[0.02] flex items-center justify-center hover:bg-white/[0.06] transition-colors">
-            <RefreshCw className={`w-4 h-4 text-[var(--c-text-dim)] ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 text-[var(--c-text)] ${loading ? 'animate-spin' : ''}`} strokeWidth={2.5} />
           </button>
         </div>
         {!selectedAccount ? <p className="text-xs text-[var(--c-text-dim)]">{t.dashboard.noAccount}</p>
@@ -187,17 +194,17 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
       {selectedAccount && (
         <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2">
           <button onClick={() => { setShowSend(!showSend); setShowReceive(false); setSendError(''); setSendSuccess(''); if (showSend) { setSendTo(''); setSendAmount(''); } }}
-            className={`glass-card p-3 flex flex-col items-center gap-1.5 transition-all min-w-0 ${showSend ? 'border-blue-400/30 ring-1 ring-blue-400/20' : ''}`}>
-            <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center"><Send className="w-5 h-5 text-blue-400" /></div>
+            className={`glass-card action-card p-3 flex flex-col items-center gap-1.5 transition-all min-w-0 ${showSend ? 'border-blue-400/30 ring-1 ring-blue-400/20' : ''}`}>
+            <div className="icon-tile icon-tile-blue w-10 h-10"><Send className="w-5 h-5" strokeWidth={2.5} /></div>
             <span className="text-xs font-semibold text-[var(--c-text)] truncate max-w-full">{t.dashboard.send}</span>
           </button>
           <button onClick={() => { setShowReceive(!showReceive); setShowSend(false); setSendError(''); setSendSuccess(''); }}
-            className={`glass-card p-3 flex flex-col items-center gap-1.5 transition-all min-w-0 ${showReceive ? 'border-green-400/30 ring-1 ring-green-400/20' : ''}`}>
-            <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center"><QrCode className="w-5 h-5 text-green-400" /></div>
+            className={`glass-card action-card p-3 flex flex-col items-center gap-1.5 transition-all min-w-0 ${showReceive ? 'border-green-400/30 ring-1 ring-green-400/20' : ''}`}>
+            <div className="icon-tile w-10 h-10"><QrCode className="w-5 h-5" strokeWidth={2.5} /></div>
             <span className="text-xs font-semibold text-[var(--c-text)] truncate max-w-full">{t.dashboard.receive}</span>
           </button>
-          <button className="glass-card p-3 flex flex-col items-center gap-1.5 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center"><ArrowLeftRight className="w-5 h-5 text-emerald-400" /></div>
+          <button className="glass-card action-card p-3 flex flex-col items-center gap-1.5 min-w-0">
+            <div className="icon-tile icon-tile-gold w-10 h-10"><ArrowLeftRight className="w-5 h-5" strokeWidth={2.5} /></div>
             <span className="text-xs font-semibold text-[var(--c-text)] truncate max-w-full">{t.dashboard.bridge}</span>
           </button>
         </div>
@@ -206,7 +213,7 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
       {showSend && selectedAccount && account && (
         <div className="glass-card p-4 flex flex-col gap-3 border-blue-400/20">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2"><Send className="w-5 h-5 text-purple-400" /><span className="text-sm font-semibold text-[var(--c-text)]">{t.dashboard.sendTitle}</span></div>
+            <div className="flex items-center gap-2"><span className="icon-tile icon-tile-pink h-8 w-8"><Send className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-sm font-semibold text-[var(--c-text)]">{t.dashboard.sendTitle}</span></div>
             <button onClick={() => { setShowSend(false); setSendError(''); setSendTo(''); setSendAmount(''); }} className="text-[var(--c-text-dimmer)] hover:text-[var(--c-text)]"><X className="w-4 h-4" /></button>
           </div>
           <div className="flex flex-col gap-1.5"><label className="text-xs text-[var(--c-text-dim)]">{t.dashboard.from}</label><div className="input-field text-sm text-[var(--c-text)] select-all cursor-default">{truncateAddress(account.address)} ({account.label})</div></div>
@@ -224,7 +231,7 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
         <div className="glass-card p-4 flex flex-col gap-3 border-green-400/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M7 7h.01" /><path d="M7 17h.01" /><path d="M17 7h.01" /><path d="M12 7v10" /><path d="M17 12h.01" /></svg>
+              <span className="icon-tile h-8 w-8"><QrCode className="w-4 h-4" strokeWidth={2.5} /></span>
               <span className="text-sm font-semibold text-[var(--c-text)]">{t.dashboard.receiveTitle}</span>
             </div>
             <button onClick={() => setShowReceive(false)} className="text-[var(--c-text-dimmer)] hover:text-[var(--c-text)]"><X className="w-4 h-4" /></button>
@@ -248,24 +255,24 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
       )}
 
       {connected && chainStatus && (<>
-        <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-blue-400" /><span className="text-xs font-semibold text-[var(--c-text-dim)]">{t.dashboard.networkStats}</span></div>
+        <div className="flex items-center gap-2"><span className="icon-tile icon-tile-blue h-7 w-7"><Activity className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold text-[var(--c-text-dim)]">{t.dashboard.networkStats}</span></div>
         <div className="grid grid-cols-2 gap-2">
-          <StatCard icon={Zap} label={t.dashboard.activeMiners} value={chainStatus.activeMiners.toLocaleString()} />
-          <StatCard icon={Database} label={t.dashboard.deals} value={chainStatus.deals.toLocaleString()} />
-          <StatCard icon={Layers} label={t.dashboard.intents} value={chainStatus.intents.toLocaleString()} />
-          <StatCard icon={Shield} label={t.dashboard.validators} value={chainStatus.validators.toLocaleString()} />
+          <StatCard icon={Zap} label={t.dashboard.activeMiners} value={(chainStatus.activeMiners ?? 0).toLocaleString()} />
+          <StatCard icon={Database} label={t.dashboard.deals} value={(chainStatus.deals ?? 0).toLocaleString()} />
+          <StatCard icon={Layers} label={t.dashboard.intents} value={(chainStatus.intents ?? 0).toLocaleString()} />
+          <StatCard icon={Shield} label={t.dashboard.validators} value={(chainStatus.validators ?? 0).toLocaleString()} />
         </div>
-        <div className="flex items-center gap-2"><TrendingUp className="w-4 h-4 text-purple-400" /><span className="text-xs font-semibold text-[var(--c-text-dim)]">{t.dashboard.tokenEconomy}</span></div>
+        <div className="flex items-center gap-2"><span className="icon-tile icon-tile-pink h-7 w-7"><TrendingUp className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold text-[var(--c-text-dim)]">{t.dashboard.tokenEconomy}</span></div>
         <div className="grid grid-cols-2 gap-2">
-          <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-1.5 text-[var(--c-text-dim)]"><Coins className="w-4 h-4" /><span className="text-xs font-semibold">{t.dashboard.totalSupply}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatBalance(chainStatus.totalSupply)} FAI</span></div>
-          <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-1.5 text-[var(--c-text-dim)]"><Activity className="w-4 h-4" /><span className="text-xs font-semibold">{t.dashboard.baseFee}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{chainStatus.feeMarket.baseFee.toFixed(4)} FAI</span></div>
-          <div className="glass-card p-3 flex flex-col gap-1.5 col-span-2"><div className="flex items-center gap-1.5 text-[var(--c-text-dim)]"><Database className="w-4 h-4 shrink-0" /><span className="text-xs font-semibold truncate">{t.dashboard.storagePrice}</span></div><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatFiat(chainStatus.storagePricing.basePricePerGiBMonth)} FAI</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.perGibMonth}</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.minFee} {chainStatus.storagePricing.minimumFee.toFixed(4)}</span></div></div>
+          <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile icon-tile-gold h-7 w-7"><Coins className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold">{t.dashboard.totalSupply}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatBalance(chainStatus.totalSupply ?? 0)} FAI</span></div>
+          <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile icon-tile-blue h-7 w-7"><Activity className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold">{t.dashboard.baseFee}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{(chainStatus.feeMarket?.baseFee ?? 0).toFixed(4)} FAI</span></div>
+          <div className="glass-card p-3 flex flex-col gap-1.5 col-span-2"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile h-7 w-7 shrink-0"><Database className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold truncate">{t.dashboard.storagePrice}</span></div><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatFiat(chainStatus.storagePricing?.basePricePerGiBMonth ?? 0)} FAI</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.perGibMonth}</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.minFee} {(chainStatus.storagePricing?.minimumFee ?? 0).toFixed(4)}</span></div></div>
         </div>
       </>)}
 
       {!connected && (
         <div className="glass-card p-4 flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-full bg-red-400/10 flex items-center justify-center"><Activity className="w-6 h-6 text-red-400" /></div>
+          <div className="icon-tile icon-tile-red w-12 h-12"><Activity className="w-6 h-6" strokeWidth={2.5} /></div>
           <div><p className="text-sm font-semibold text-[var(--c-text)]">{t.dashboard.cannotConnect}</p><p className="text-xs text-[var(--c-text-dim)] mt-1">{t.dashboard.checkSettings}</p></div>
         </div>
       )}

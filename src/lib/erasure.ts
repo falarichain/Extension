@@ -1,4 +1,8 @@
-import { sha256 } from './crypto';
+import { sha256, stripHexPrefix } from './crypto';
+
+function sha256Hex(data: Uint8Array): string {
+  return stripHexPrefix(sha256(data));
+}
 
 export function computeSegmentRoots(data: Uint8Array, segmentSize: number): {
   fileSize: number;
@@ -8,7 +12,7 @@ export function computeSegmentRoots(data: Uint8Array, segmentSize: number): {
   const roots: string[] = [];
   for (let offset = 0; offset < data.length; offset += segmentSize) {
     const chunk = data.slice(offset, Math.min(offset + segmentSize, data.length));
-    roots.push(sha256(chunk));
+    roots.push(sha256Hex(chunk));
   }
   return {
     fileSize: data.length,
@@ -18,7 +22,7 @@ export function computeSegmentRoots(data: Uint8Array, segmentSize: number): {
 }
 
 export function merkleRoot(hashes: string[]): string {
-  if (hashes.length === 0) return sha256(new Uint8Array(0));
+  if (hashes.length === 0) return sha256Hex(new Uint8Array(0));
   let layer = hashes;
   while (layer.length > 1) {
     const next: string[] = [];
@@ -26,7 +30,7 @@ export function merkleRoot(hashes: string[]): string {
       const left = layer[i];
       const right = i + 1 < layer.length ? layer[i + 1] : layer[i];
       const combined = new Uint8Array([...hexToBytes(left), ...hexToBytes(right)]);
-      next.push(sha256(combined));
+      next.push(sha256Hex(combined));
     }
     layer = next;
   }

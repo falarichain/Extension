@@ -118,6 +118,12 @@ export const ALLOWED_PERMISSIONS = [
   'retrieval',
   'collection_create',
   'append_record',
+  'create_key_envelope',
+  'create_share',
+  'revoke_share',
+  'share_create',
+  'share_revoke',
+  'private_read',
 ];
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -128,4 +134,59 @@ export const PERMISSION_LABELS: Record<string, string> = {
   retrieval: 'Retrieval',
   collection_create: 'Create Collection',
   append_record: 'Append Record',
+  create_key_envelope: 'Create Key Envelope',
+  create_share: 'Create Share',
+  revoke_share: 'Revoke Share',
+  share_create: 'Create Share',
+  share_revoke: 'Revoke Share',
+  private_read: 'Read Private Content',
 };
+
+export interface PasscodeKDFParams {
+  name: string;
+  salt: string;
+  memoryKiB?: number;
+  memory_kib?: number;
+  iterations: number;
+  parallelism?: number;
+}
+
+export interface KeyEnvelope {
+  envelopeId?: string;
+  envelope_id?: string;
+  intentId?: string;
+  intent_id?: string;
+  shareId?: string;
+  share_id?: string;
+  owner: string;
+  recipient: string;
+  recipientType?: string;
+  recipient_type?: string;
+  algorithm: string;
+  encryptedDataKey?: string;
+  encrypted_data_key?: string;
+  nonce?: string;
+  kdf?: PasscodeKDFParams;
+  createdAtUnix?: number;
+  created_at_unix?: number;
+  expiresAtUnix?: number;
+  expires_at_unix?: number;
+  revoked?: boolean;
+}
+
+export interface ShareRecord {
+  shareId?: string;
+  share_id?: string;
+  intentId?: string;
+  intent_id?: string;
+  owner: string;
+  mode: 'address' | 'passcode' | 'link_fragment';
+  recipient?: string;
+  envelopeId?: string;
+  envelope_id?: string;
+  createdAtUnix?: number;
+  created_at_unix?: number;
+  expiresAtUnix?: number;
+  expires_at_unix?: number;
+  revoked?: boolean;
+}

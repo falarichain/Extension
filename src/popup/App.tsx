@@ -10,6 +10,7 @@ import { UploadPage } from './pages/UploadPage';
 import { DownloadPage } from './pages/DownloadPage';
 import { SettingsPage } from './pages/SettingsPage';
 import WelcomePage from './pages/WelcomePage';
+import { extensionAssetUrl } from '@/lib/extensionAssets';
 
 type Page = 'dashboard' | 'agent-keys' | 'upload' | 'download' | 'settings' | 'welcome';
 
@@ -59,9 +60,9 @@ export default function App() {
     const hasWallets = wallets.length > 0 || accounts.length > 0;
     if (!hasWallets) {
       setPage('welcome');
-    } else {
-      setPage('dashboard');
+      return;
     }
+    setPage((current) => (current === 'welcome' ? 'dashboard' : current));
   }, [initComplete, isLocked, wallets, accounts]);
 
   const handleThemeChange = (newTheme: 'dark' | 'light') => {
@@ -93,9 +94,9 @@ export default function App() {
   if (!initComplete) {
     return (
       <I18nProvider>
-        <div data-theme={theme} className="w-full h-full bg-[var(--c-bg)] flex items-center justify-center">
+        <div data-theme={theme} className="flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center bg-[var(--c-bg)]">
           <div className="flex flex-col items-center gap-3">
-            <img src="/icons/icon48.png" alt="Falari" className="w-12 h-12 animate-pulse" />
+            <img src={extensionAssetUrl('icons/icon48.png')} alt="Falari" className="w-12 h-12 animate-pulse" />
           </div>
         </div>
       </I18nProvider>
@@ -105,7 +106,7 @@ export default function App() {
   if (isLocked) {
     return (
       <I18nProvider>
-        <div data-theme={theme} className="w-full h-full">
+        <div data-theme={theme} className="flex h-full min-h-0 w-full flex-1 flex-col">
           <LockScreen />
         </div>
       </I18nProvider>
@@ -133,9 +134,11 @@ export default function App() {
 
   return (
     <I18nProvider>
-      <Layout currentPage={page} onNavigate={setPage} chainNode={chainNode} chainStatus={chainStatus} theme={theme} api={api}>
-        {renderPage()}
-      </Layout>
+      <div data-theme={theme} className="flex h-full min-h-0 w-full flex-1 flex-col">
+        <Layout currentPage={page} onNavigate={setPage} chainNode={chainNode} chainStatus={chainStatus} theme={theme} api={api}>
+          {renderPage()}
+        </Layout>
+      </div>
     </I18nProvider>
   );
 }
