@@ -165,6 +165,9 @@ export function decodeImportAgentKeyString(encoded: string): LocalAgentKey | nul
 }
 
 export function updateAgentKeyEncodedString(key: LocalAgentKey): LocalAgentKey {
+  if (!key.privateKey) {
+    return { ...key, encodedString: '', hasPrivateKey: false, remoteOnly: true };
+  }
   const encoded = encodeAgentKeyString(
     key.keyId,
     key.master,

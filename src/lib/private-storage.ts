@@ -5,7 +5,9 @@ import { stripHexPrefix } from './crypto';
 const SEGMENT_ALGORITHM = 'AES-256-GCM/segment-v1';
 const OWNER_WRAP_ALGORITHM = 'AES-256-GCM/key-wrap-v1';
 const PASSCODE_WRAP_ALGORITHM = 'AES-256-GCM/passcode-wrap-v1';
+const ADDRESS_WRAP_ALGORITHM = 'AES-256-GCM/address-link-wrap-v1';
 const PASSCODE_KDF = 'PBKDF2-SHA256/passcode-v1';
+const ADDRESS_KDF = 'PBKDF2-SHA256/address-link-v1';
 const DEFAULT_SEGMENT_SIZE = 1024 * 1024;
 const DEFAULT_PBKDF2_ITERATIONS = 310000;
 
@@ -23,6 +25,14 @@ export interface PasscodeShareResult {
   envelopeId?: string;
 }
 
+export interface AddressShareResult {
+  shareId: string;
+  recipient: string;
+  url: string;
+  accessCode: string;
+  envelopeId?: string;
+}
+
 export async function uploadPrivateFile(
   api: ChainApi,
   file: File,
@@ -32,6 +42,8 @@ export async function uploadPrivateFile(
     parityShards?: number;
     duration?: number;
     ownerWrapKeyBase64?: string;
+    ownerPrivateKey?: string;
+    ownerAddress?: string;
     onProgress?: (stage: string) => void;
   } = {},
 ): Promise<PrivateUploadResult> {
@@ -147,9 +159,14 @@ export async function uploadPrivateFile(
     manifestRoot: await sha256Hex(new TextEncoder().encode(intentId)),
   });
 
+  const ownerWrapKey = options.ownerWrapKeyBase64
+    ? base64ToBytes(options.ownerWrapKeyBase64)
+    : options.ownerPrivateKey
+      ? await deriveStorageVaultKey(options.ownerPrivateKey, options.ownerAddress || user)
+      : null;
   let ownerEnvelopeId: string | undefined;
-  if (options.ownerWrapKeyBase64) {
-    const wrapped = await wrapDataKey(dataKey, base64ToBytes(options.ownerWrapKeyBase64), OWNER_WRAP_ALGORITHM);
+  if (ownerWrapKey) {
+    const wrapped = await wrapDataKey(dataKey, ownerWrapKey, OWNER_WRAP_ALGORITHM);
     const envelopeResp = await api.createKeyEnvelope({
       intentId,
       owner: user,
@@ -174,7 +191,9 @@ export async function downloadPrivateFile(
   api: ChainApi,
   intentId: string,
   options: {
-    dataKeyBase64: string;
+    dataKeyBase64?: string;
+    owner?: string;
+    ownerPrivateKey?: string;
   },
 ): Promise<{ fileName: string; data: Uint8Array }> {
   const manifest = await api.getManifest(intentId);
@@ -183,7 +202,9 @@ export async function downloadPrivateFile(
   if (!encryption) {
     throw new Error('intent is not encrypted');
   }
-  const key = base64ToBytes(options.dataKeyBase64);
+  const key = options.dataKeyBase64
+    ? base64ToBytes(options.dataKeyBase64)
+    : await recoverOwnerDataKey(api, intentId, options.owner || '', options.ownerPrivateKey || '');
   const keyHash = await sha256Hex(key);
   if (strip0x(encryption.keyHash ?? encryption.key_hash) !== keyHash) {
     throw new Error('data key does not match manifest');
@@ -265,6 +286,19 @@ export async function createPasscodeShare(
   };
 }
 
+export async function deriveStorageVaultKeyBase64(masterPrivateKey: string, ownerAddress: string): Promise<string> {
+  return bytesToBase64(await deriveStorageVaultKey(masterPrivateKey, ownerAddress));
+}
+
+export async function recoverOwnerDataKeyBase64(
+  api: ChainApi,
+  intentId: string,
+  owner: string,
+  masterPrivateKey: string,
+): Promise<string> {
+  return bytesToBase64(await recoverOwnerDataKey(api, intentId, owner, masterPrivateKey));
+}
+
 export async function openPasscodeShare(
   api: ChainApi,
   shareId: string,
@@ -280,11 +314,28 @@ export async function openPasscodeShare(
   const iterations = envelope.kdf.iterations || DEFAULT_PBKDF2_ITERATIONS;
   const wrappingKey = await derivePasscodeWrappingKey(accessCode, salt, iterations);
   const encryptedDataKey = envelope.encryptedDataKey || envelope.encrypted_data_key || '';
-  const dataKey = await unwrapDataKey(encryptedDataKey, envelope.nonce || '', wrappingKey);
+  const dataKey = await unwrapDataKey(encryptedDataKey, envelope.nonce || '', wrappingKey, PASSCODE_WRAP_ALGORITHM);
   return {
     intentId: share.intentId || share.intent_id || '',
     dataKeyBase64: bytesToBase64(dataKey),
   };
+}
+
+export function parseShareLink(input: string): { shareId: string; accessCode?: string; recipient?: string } {
+  const value = input.trim();
+  if (!value) return { shareId: '' };
+  try {
+    const url = new URL(value);
+    const match = url.pathname.match(/\/share\/([^/?#]+)/);
+    const params = new URLSearchParams(url.hash.replace(/^#/, ''));
+    return {
+      shareId: decodeURIComponent(match?.[1] || value),
+      accessCode: params.get('key') || undefined,
+      recipient: params.get('recipient') || undefined,
+    };
+  } catch {
+    return { shareId: value };
+  }
 }
 
 export async function sharePrivateFileWithAddress(
@@ -293,13 +344,84 @@ export async function sharePrivateFileWithAddress(
     intentId: string;
     owner: string;
     recipient: string;
-    encryptedDataKey: string;
-    algorithm: string;
-    nonce?: string;
+    ownerPrivateKey: string;
+    dataKeyBase64?: string;
+    appBaseUrl?: string;
+    includeKeyInUrl?: boolean;
     expiresAtUnix?: number;
   },
-) {
-  return api.createAddressShare(params);
+): Promise<AddressShareResult> {
+  const recipient = normalizeShareAddress(params.recipient);
+  const dataKey = params.dataKeyBase64
+    ? base64ToBytes(params.dataKeyBase64)
+    : await recoverOwnerDataKey(api, params.intentId, params.owner, params.ownerPrivateKey);
+  const accessCode = formatAccessCode(randomBytes(24));
+  const salt = randomBytes(16);
+  const wrapKey = await deriveAddressLinkWrappingKey(accessCode, recipient, salt);
+  const wrapped = await wrapDataKey(dataKey, wrapKey, ADDRESS_WRAP_ALGORITHM);
+  const resp = await api.createAddressShare({
+    intentId: params.intentId,
+    owner: params.owner,
+    recipient,
+    algorithm: ADDRESS_WRAP_ALGORITHM,
+    encryptedDataKey: wrapped.encryptedDataKey,
+    nonce: wrapped.nonce,
+    kdf: {
+      name: ADDRESS_KDF,
+      salt: bytesToBase64(salt),
+      iterations: DEFAULT_PBKDF2_ITERATIONS,
+      parallelism: 1,
+    },
+    expiresAtUnix: params.expiresAtUnix,
+  });
+  const shareId = resp.share.shareId || resp.share.share_id || '';
+  const base = params.appBaseUrl ? `${params.appBaseUrl.replace(/\/$/, '')}/share/${shareId}` : '';
+  return {
+    shareId,
+    recipient,
+    url: base && params.includeKeyInUrl !== false
+      ? `${base}#key=${encodeURIComponent(accessCode)}&recipient=${encodeURIComponent(recipient)}`
+      : base,
+    accessCode,
+    envelopeId: resp.envelope.envelopeId || resp.envelope.envelope_id,
+  };
+}
+
+export async function openAddressShare(
+  api: ChainApi,
+  params: {
+    shareId?: string;
+    intentId?: string;
+    recipient: string;
+    shareSecret: string;
+  },
+): Promise<{ intentId: string; dataKeyBase64: string }> {
+  const recipient = normalizeShareAddress(params.recipient);
+  const resp = await api.listShares({
+    shareId: params.shareId,
+    intentId: params.intentId,
+    recipient,
+  });
+  const share = resp.shares[0];
+  const envelope = resp.envelopes?.find((item) => (item.recipientType || item.recipient_type) === 'address') || resp.envelopes?.[0];
+  if (!share || !envelope || !envelope.kdf?.salt) {
+    throw new Error('address share not found');
+  }
+  if (share.recipient && share.recipient.toLowerCase() !== recipient.toLowerCase()) {
+    throw new Error('当前钱包地址不是这个分享的接收地址');
+  }
+  if (!params.shareSecret.trim()) {
+    throw new Error('地址分享需要分享链接里的密钥片段');
+  }
+  const salt = base64ToBytes(envelope.kdf.salt);
+  const iterations = envelope.kdf.iterations || DEFAULT_PBKDF2_ITERATIONS;
+  const wrapKey = await deriveAddressLinkWrappingKey(params.shareSecret, recipient, salt, iterations);
+  const encryptedDataKey = envelope.encryptedDataKey || envelope.encrypted_data_key || '';
+  const dataKey = await unwrapDataKey(encryptedDataKey, envelope.nonce || '', wrapKey, envelope.algorithm || ADDRESS_WRAP_ALGORITHM);
+  return {
+    intentId: share.intentId || share.intent_id || '',
+    dataKeyBase64: bytesToBase64(dataKey),
+  };
 }
 
 async function encryptSegment(plaintext: Uint8Array, key: Uint8Array, nonceBase: Uint8Array, keyHash: string, segmentId: number): Promise<Uint8Array> {
@@ -345,13 +467,68 @@ async function wrapDataKey(dataKey: Uint8Array, wrappingKey: Uint8Array, algorit
   return { encryptedDataKey: bytesToBase64(encrypted), nonce: bytesToBase64(nonce) };
 }
 
-async function unwrapDataKey(encryptedDataKey: string, nonceBase64: string, wrappingKey: Uint8Array): Promise<Uint8Array> {
+async function unwrapDataKey(encryptedDataKey: string, nonceBase64: string, wrappingKey: Uint8Array, algorithm: string): Promise<Uint8Array> {
   const cryptoKey = await crypto.subtle.importKey('raw', bufferSource(wrappingKey), 'AES-GCM', false, ['decrypt']);
   return new Uint8Array(await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: bufferSource(base64ToBytes(nonceBase64)), additionalData: bufferSource(new TextEncoder().encode(PASSCODE_WRAP_ALGORITHM)) },
+    { name: 'AES-GCM', iv: bufferSource(base64ToBytes(nonceBase64)), additionalData: bufferSource(new TextEncoder().encode(algorithm)) },
     cryptoKey,
     bufferSource(base64ToBytes(encryptedDataKey)),
   ));
+}
+
+async function recoverOwnerDataKey(
+  api: ChainApi,
+  intentId: string,
+  owner: string,
+  masterPrivateKey: string,
+): Promise<Uint8Array> {
+  if (!owner || !masterPrivateKey) {
+    throw new Error('owner and master private key are required to recover the data key');
+  }
+  const resp = await api.listKeyEnvelopes({
+    intentId,
+    recipient: owner,
+    recipientType: 'owner',
+  });
+  const envelope = resp.envelopes.find((item) => {
+    const recipientType = item.recipientType || item.recipient_type;
+    return recipientType === 'owner';
+  });
+  if (!envelope) {
+    throw new Error('owner key envelope not found');
+  }
+  const algorithm = envelope.algorithm || OWNER_WRAP_ALGORITHM;
+  const encryptedDataKey = envelope.encryptedDataKey || envelope.encrypted_data_key || '';
+  const vaultKey = await deriveStorageVaultKey(masterPrivateKey, owner);
+  return unwrapDataKey(encryptedDataKey, envelope.nonce || '', vaultKey, algorithm);
+}
+
+async function deriveStorageVaultKey(masterPrivateKey: string, ownerAddress: string): Promise<Uint8Array> {
+  const privateKeyBytes = decodePrivateKey(masterPrivateKey);
+  const context = new TextEncoder().encode(`Falari Storage Vault Key v1:${ownerAddress.toLowerCase()}:`);
+  const material = concatBytes(context, privateKeyBytes);
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', bufferSource(material)));
+}
+
+function decodePrivateKey(privateKey: string): Uint8Array {
+  const hex = privateKey.startsWith('0x') || privateKey.startsWith('0X') ? privateKey.slice(2) : privateKey;
+  if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) {
+    return new TextEncoder().encode(privateKey);
+  }
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+async function deriveAddressLinkWrappingKey(
+  accessCode: string,
+  recipient: string,
+  salt: Uint8Array,
+  iterations = DEFAULT_PBKDF2_ITERATIONS,
+): Promise<Uint8Array> {
+  return derivePasscodeWrappingKey(`${accessCode}:${recipient.toLowerCase()}`, salt, iterations);
 }
 
 async function derivePasscodeWrappingKey(accessCode: string, salt: Uint8Array, iterations = DEFAULT_PBKDF2_ITERATIONS): Promise<Uint8Array> {
@@ -403,4 +580,12 @@ function formatAccessCode(bytes: Uint8Array): string {
 
 function strip0x(value: string): string {
   return stripHexPrefix(value || '');
+}
+
+function normalizeShareAddress(address: string): string {
+  const value = address.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(value)) {
+    throw new Error('接收方地址格式不正确');
+  }
+  return `0x${value.slice(2).toLowerCase()}`;
 }

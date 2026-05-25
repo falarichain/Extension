@@ -3,6 +3,7 @@ import { useAppStore } from '@/lib/store';
 import { useI18n } from '@/lib/i18n';
 import type { ChainApi } from '@/lib/api';
 import { downloadFile } from '@/lib/storage';
+import { downloadPrivateFile } from '@/lib/private-storage';
 import {
   ArrowDownCircle,
   Download,
@@ -26,6 +27,7 @@ function formatSize(bytes: number): string {
 
 export function DownloadPage({ api }: Props) {
   const selectedAccount = useAppStore((s) => s.selectedAccount);
+  const getPrivateKey = useAppStore((s) => s.getPrivateKey);
   const { t } = useI18n();
 
   const [intentId, setIntentId] = useState('');
@@ -34,6 +36,7 @@ export function DownloadPage({ api }: Props) {
     fileName: string;
     fileSize: number;
     status: string;
+    encrypted: boolean;
   } | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -50,9 +53,10 @@ export function DownloadPage({ api }: Props) {
     try {
       const result = await api.getManifest(intentId.trim());
       setManifest({
-        fileName: result.plan.fileName,
-        fileSize: result.plan.fileSize,
+        fileName: (result.plan as any).fileName || (result.plan as any).file_name,
+        fileSize: (result.plan as any).fileSize || (result.plan as any).file_size,
         status: result.status,
+        encrypted: !!(result.plan as any).encryption,
       });
     } catch (err: any) {
       setError(err?.message || t.download.fetchFail);
@@ -73,12 +77,18 @@ export function DownloadPage({ api }: Props) {
         setDownloadProgress((p) => Math.min(p + 10, 90));
       }, 500);
 
-      const result = await downloadFile(api, intentId.trim(), selectedAccount);
+      const result = manifest?.encrypted
+        ? await downloadPrivateFile(api, intentId.trim(), {
+          owner: selectedAccount,
+          ownerPrivateKey: await getPrivateKey(selectedAccount),
+        })
+        : await downloadFile(api, intentId.trim(), selectedAccount);
 
       clearInterval(progressInterval);
       setDownloadProgress(100);
 
-      const blob = new Blob([result.data as BlobPart], { type: 'application/octet-stream' });
+      const copy = new Uint8Array(result.data);
+      const blob = new Blob([copy.buffer], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -177,7 +187,7 @@ export function DownloadPage({ api }: Props) {
                     {manifest.fileName}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {formatSize(manifest.fileSize)}
+                    {formatSize(manifest.fileSize)} · {manifest.encrypted ? '私有加密' : '公开'}
                   </p>
                 </div>
               </div>

@@ -84,6 +84,8 @@ export class ChainApi {
 
   async getAccount(address: string): Promise<{
     address: string;
+    publicKey?: string;
+    public_key?: string;
     balance: number;
     nonce: number;
     lockedStake: number;
@@ -278,6 +280,7 @@ export class ChainApi {
     algorithm: string;
     encryptedDataKey: string;
     nonce?: string;
+    kdf?: any;
     expiresAtUnix?: number;
   }): Promise<{ share: ShareRecord; envelope: KeyEnvelope }> {
     return request(this.baseUrl, '/shares/address', {
@@ -382,6 +385,14 @@ export class ChainApi {
     if (shardCID) params.set('shard_cid', shardCID);
     if (intentId) params.set('intent_id', intentId);
     return request(this.baseUrl, `/storage/providers?${params.toString()}`);
+  }
+
+  async getRoutes(shardHash?: string, shardCID?: string, intentId?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (shardHash) params.set('shard_hash', shardHash);
+    if (shardCID) params.set('shard_cid', shardCID);
+    if (intentId) params.set('intent', intentId);
+    return request(this.baseUrl, `/storage/routes?${params.toString()}`);
   }
 
   async downloadShard(minerEndpoint: string, shardHash: string): Promise<Uint8Array> {

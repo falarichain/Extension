@@ -250,8 +250,7 @@ export async function downloadFile(
     for (const assign of segAssignments) {
       const shardIndex = assign.shardIndex;
       try {
-        const endpoint = assign.endpoint || (assign as any).minerEndpoint;
-        const data = await api.downloadShard(endpoint, assign.shardHash);
+        const data = await downloadShardFromNetwork(api, assign, intentId);
         shards[shardIndex] = data;
       } catch {
         shards[shardIndex] = null;
@@ -268,6 +267,42 @@ export async function downloadFile(
   }
 
   return { fileName: plan.fileName, data: result };
+}
+
+async function downloadShardFromNetwork(api: ChainApi, assign: any, intentId: string): Promise<Uint8Array> {
+  const shardHash = assign.shardHash || assign.shard_hash;
+  const shardCID = assign.shardCID || assign.shard_cid;
+  try {
+    const routeResp = await api.getRoutes(shardHash, shardCID, intentId);
+    const routes = (routeResp.routes || []).filter((route: any) => (
+      route.download_service_enabled !== false &&
+      (route.transport === 'http-block' || route.transport === 'http-shard')
+    ));
+    for (const route of routes) {
+      try {
+        if (route.transport === 'http-block' && route.endpoint && route.shard_cid) {
+          return await api.downloadBlock(route.endpoint, route.shard_cid);
+        }
+        if (route.transport === 'http-shard' && route.endpoint && route.shard_hash) {
+          return await api.downloadShard(route.endpoint, route.shard_hash);
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    // Fall through to the original assignment endpoint when route discovery is unavailable.
+  }
+  const endpoint = assign.endpoint || assign.minerEndpoint || assign.miner_endpoint;
+  if (!endpoint) throw new Error('no storage endpoint available for shard');
+  if (shardCID) {
+    try {
+      return await api.downloadBlock(endpoint, shardCID);
+    } catch {
+      return api.downloadShard(endpoint, shardHash);
+    }
+  }
+  return api.downloadShard(endpoint, shardHash);
 }
 
 function decodeShardsFromDownload(

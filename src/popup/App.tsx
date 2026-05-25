@@ -8,11 +8,12 @@ import { Dashboard } from './pages/Dashboard';
 import { AgentKeysPage } from './pages/AgentKeysPage';
 import { UploadPage } from './pages/UploadPage';
 import { DownloadPage } from './pages/DownloadPage';
+import { SharePage } from './pages/SharePage';
 import { SettingsPage } from './pages/SettingsPage';
 import WelcomePage from './pages/WelcomePage';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
 
-type Page = 'dashboard' | 'agent-keys' | 'upload' | 'download' | 'settings' | 'welcome';
+type Page = 'dashboard' | 'agent-keys' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
 
 export default function App() {
   const loadState = useAppStore((s) => s.loadState);
@@ -22,7 +23,6 @@ export default function App() {
   const isLocked = useAppStore((s) => s.isLocked);
   const stateLoaded = useAppStore((s) => s.stateLoaded);
   const checkSessionUnlocked = useAppStore((s) => s.checkSessionUnlocked);
-
   const [page, setPage] = useState<Page>('dashboard');
   const [api] = useState(() => new ChainApi(chainNode.url));
   const [chainStatus, setChainStatus] = useState<any>(null);
@@ -125,6 +125,8 @@ export default function App() {
         return <UploadPage api={api} />;
       case 'download':
         return <DownloadPage api={api} />;
+      case 'share':
+        return <SharePage api={api} />;
       case 'settings':
         return <SettingsPage theme={theme} onThemeChange={handleThemeChange} />;
       default:

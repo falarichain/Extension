@@ -34,6 +34,8 @@ export interface LocalAgentKey {
   createdAt: number;
   registered: boolean;
   revoked: boolean;
+  hasPrivateKey?: boolean;
+  remoteOnly?: boolean;
 }
 
 export interface ChainNodeConfig {

@@ -4,6 +4,7 @@ import { useI18n } from '@/lib/i18n';
 import type { ChainApi } from '@/lib/api';
 import { uploadFile } from '@/lib/storage';
 import type { UploadProgress } from '@/lib/storage';
+import { uploadPrivateFile } from '@/lib/private-storage';
 import {
   ArrowUpCircle,
   File,
@@ -61,11 +62,13 @@ function formatSize(bytes: number): string {
 
 export function UploadPage({ api }: Props) {
   const selectedAccount = useAppStore((s) => s.selectedAccount);
+  const getPrivateKey = useAppStore((s) => s.getPrivateKey);
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [duration, setDuration] = useState(90 * 86400);
+  const [accessMode, setAccessMode] = useState<'private' | 'public'>('private');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [result, setResult] = useState<{ intentId: string; dealId: string } | null>(null);
@@ -167,13 +170,36 @@ export function UploadPage({ api }: Props) {
     setResult(null);
 
     try {
-      const res = await uploadFile(api, file, selectedAccount, {
-        dataShards: DATA_SHARDS,
-        parityShards: PARITY_SHARDS,
-        duration,
-        onProgress: (p) => setProgress({ ...p }),
-      });
-      setResult(res);
+      if (accessMode === 'private') {
+        const masterPrivateKey = await getPrivateKey(selectedAccount);
+        if (!masterPrivateKey) {
+          throw new Error('Master private key is required for private upload recovery');
+        }
+        const res = await uploadPrivateFile(api, file, selectedAccount, {
+          dataShards: DATA_SHARDS,
+          parityShards: PARITY_SHARDS,
+          duration,
+          ownerPrivateKey: masterPrivateKey,
+          ownerAddress: selectedAccount,
+          onProgress: (stage) => setProgress({
+            stage: stage === 'encrypting' ? 'erasure' : stage === 'creating_intent' ? 'init' : stage as UploadProgress['stage'],
+            segmentsTotal: 0,
+            segmentsDone: 0,
+            shardsTotal: 0,
+            shardsDone: 0,
+            currentSegment: 0,
+          }),
+        });
+        setResult({ intentId: res.intentId, dealId: res.dealId });
+      } else {
+        const res = await uploadFile(api, file, selectedAccount, {
+          dataShards: DATA_SHARDS,
+          parityShards: PARITY_SHARDS,
+          duration,
+          onProgress: (p) => setProgress({ ...p }),
+        });
+        setResult(res);
+      }
     } catch (err: any) {
       setError(err?.message || String(err));
       setProgress((prev) =>
@@ -192,7 +218,7 @@ export function UploadPage({ api }: Props) {
     } finally {
       setUploading(false);
     }
-  }, [file, selectedAccount, api, duration]);
+  }, [file, selectedAccount, api, duration, accessMode, getPrivateKey]);
 
   const percent = progress ? computeProgress(progress) : 0;
 
@@ -296,6 +322,39 @@ export function UploadPage({ api }: Props) {
               </div>
             </div>
           )}
+
+          <div className="glass-card p-4 space-y-3">
+            <span className="text-xs text-slate-400">访问权限</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className={`px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200 border min-w-0 ${
+                  accessMode === 'private'
+                    ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                    : 'border-white/[0.06] text-slate-400 hover:text-slate-200 hover:border-white/[0.1]'
+                }`}
+                onClick={() => setAccessMode('private')}
+                disabled={uploading}
+              >
+                私有
+              </button>
+              <button
+                className={`px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200 border min-w-0 ${
+                  accessMode === 'public'
+                    ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                    : 'border-white/[0.06] text-slate-400 hover:text-slate-200 hover:border-white/[0.1]'
+                }`}
+                onClick={() => setAccessMode('public')}
+                disabled={uploading}
+              >
+                公开
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              {accessMode === 'private'
+                ? '客户端会用主钱包派生 Storage Vault Key，并为 owner 创建可恢复的 Key Envelope。换电脑导入主钱包后仍可解密。'
+                : '公开模式保留共用 CID 语义，同一内容可被多用户复用。'}
+            </p>
+          </div>
 
           <div className="glass-card p-4 space-y-3">
             <span className="text-xs text-slate-400">{t.upload.duration}</span>

@@ -26,6 +26,7 @@ import {
   Download,
 } from 'lucide-react';
 import { normalizeAddress } from '@/lib/crypto';
+import { accountAddressFromPublicKey } from '@/lib/crypto';
 
 interface AgentKeysPageProps {
   api: ChainApi;
@@ -96,28 +97,66 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
         existingMap.set(k.keyId, k);
       }
 
+      const mergedKeys = [...agentKeys];
       for (const chainKey of keys) {
-        const keyId = chainKey.key_id;
+        const keyId = chainKey.key_id || chainKey.keyId;
+        const agentPub = chainKey.agent_pub || chainKey.agentPub || '';
+        let agentAddress = chainKey.address || '';
+        if (!agentAddress && agentPub) {
+          try {
+            agentAddress = accountAddressFromPublicKey(agentPub);
+          } catch {
+            agentAddress = agentPub;
+          }
+        }
         if (existingMap.has(keyId)) {
           const local = existingMap.get(keyId)!;
-          updateAgentKey(keyId, {
+          const updated = {
             name: chainKey.name || local.name,
             permissions: chainKey.permissions || local.permissions,
             dailyLimit: chainKey.daily_limit ?? local.dailyLimit,
             totalLimit: chainKey.total_limit ?? local.totalLimit,
             expiresAt: chainKey.expires_at ?? local.expiresAt,
+            createdAt: chainKey.created_at ?? local.createdAt,
+            address: agentAddress || local.address,
             registered: true,
             revoked: chainKey.revoked || false,
+            hasPrivateKey: !!local.privateKey,
+            remoteOnly: !local.privateKey,
+          };
+          updateAgentKey(keyId, updated);
+          const index = mergedKeys.findIndex((item) => item.keyId === keyId);
+          if (index >= 0) {
+            mergedKeys[index] = { ...mergedKeys[index], ...updated };
+          }
+        } else {
+          mergedKeys.push({
+            keyId,
+            name: chainKey.name || keyId || 'Chain Agent Key',
+            master: masterAddress,
+            address: agentAddress,
+            privateKey: '',
+            encodedString: '',
+            permissions: chainKey.permissions || [],
+            dailyLimit: chainKey.daily_limit ?? 0,
+            totalLimit: chainKey.total_limit ?? 0,
+            expiresAt: chainKey.expires_at ?? 0,
+            createdAt: chainKey.created_at ?? Math.floor(Date.now() / 1000),
+            registered: true,
+            revoked: chainKey.revoked || false,
+            hasPrivateKey: false,
+            remoteOnly: true,
           });
         }
       }
+      setAgentKeys(mergedKeys);
       await saveState();
     } catch (err: any) {
       setFetchError(err.message || 'Failed to fetch agent keys from chain');
     } finally {
       setFetching(false);
     }
-  }, [masterAddress, api, agentKeys, updateAgentKey, saveState]);
+  }, [masterAddress, api, agentKeys, updateAgentKey, setAgentKeys, saveState]);
 
   useEffect(() => {
     if (masterAddress) {
@@ -286,9 +325,9 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
     }
     if (key.registered) {
       return (
-        <span className="badge bg-green-500/10 text-green-400 border-green-500/20 text-[10px]">
+        <span className={`badge ${key.privateKey ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'} text-[10px]`}>
           <Shield className="w-3 h-3 mr-1" />
-          {t.agentKeys.registeredStatus}
+          {key.privateKey ? t.agentKeys.registeredStatus : '链上记录'}
         </span>
       );
     }
@@ -544,7 +583,7 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
                           <div className="flex flex-col gap-0.5">
                             <span className="text-[10px] text-slate-500">{t.agentKeys.status}</span>
                             <span className="text-[12px] font-semibold text-white">
-                              {key.revoked ? t.agentKeys.revoked : key.registered ? t.agentKeys.registeredStatus : t.agentKeys.local}
+                              {key.revoked ? t.agentKeys.revoked : key.registered ? (key.privateKey ? t.agentKeys.registeredStatus : '链上存在，本机无私钥') : t.agentKeys.local}
                             </span>
                           </div>
                           <div className="flex flex-col gap-0.5">
@@ -591,7 +630,8 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
                           </div>
                         </div>
 
-                        <div className="flex flex-col gap-0.5">
+                        {key.privateKey ? (
+                          <div className="flex flex-col gap-0.5">
                           <span className="text-[10px] text-slate-500">{t.agentKeys.encodedString}</span>
                           <div className="flex items-center gap-1.5">
                             <code className="text-[10px] text-slate-300 bg-white/[0.04] px-2 py-1 rounded flex-1 break-all leading-relaxed">
@@ -633,7 +673,15 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
                               )}
                             </button>
                           </div>
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 p-2.5">
+                            <AlertCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                            <p className="text-[11px] text-blue-200 leading-relaxed">
+                              这个 Agent Key 是从链上恢复的记录，本机没有私钥。你可以用主钱包撤销它，但不能继续使用它执行 Agent 操作。
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
