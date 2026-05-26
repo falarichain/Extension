@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import type { ChainApi } from '@/lib/api';
 import type { ChainStatus } from '@/lib/types';
+import { TOKEN_UNIT } from '@/lib/types';
 import { normalizeAddress, signTransactionHash } from '@/lib/crypto';
 import { useI18n } from '@/lib/i18n';
 import { ethers } from 'ethers';
@@ -30,9 +31,10 @@ interface DashboardProps {
 }
 
 function formatBalance(amount: number): string {
-  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(2)}M`;
-  if (amount >= 1_000) return `${(amount / 1_000).toFixed(2)}K`;
-  return amount.toFixed(4);
+  const v = amount / TOKEN_UNIT;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(2)}K`;
+  return parseFloat(v.toFixed(8)).toString();
 }
 
 function formatFiat(amount: number): string {
@@ -121,7 +123,7 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
     if (!account) { setSendError(t.dashboard.noAccount); return; }
     const to = sendTo.trim();
     let amount: number;
-    try { amount = parseFloat(sendAmount); if (isNaN(amount) || amount <= 0) { setSendError(t.dashboard.invalidAmount); return; } } catch { setSendError(t.dashboard.invalidAmount); return; }
+    try { amount = parseFloat(sendAmount); if (isNaN(amount) || amount <= 0) { setSendError(t.dashboard.invalidAmount); return; } amount = Math.round(amount * TOKEN_UNIT); } catch { setSendError(t.dashboard.invalidAmount); return; }
     if (!to) { setSendError(t.dashboard.recipientRequired); return; }
     let normalizedTo: string;
     try { normalizedTo = normalizeAddress(to); } catch { setSendError(t.dashboard.invalidRecipient); return; }
@@ -187,7 +189,7 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
         </div>
         {!selectedAccount ? <p className="text-xs text-[var(--c-text-dim)]">{t.dashboard.noAccount}</p>
         : loading && balance === null ? <div className="h-8 flex items-center"><div className="w-24 h-5 bg-white/[0.04] rounded animate-pulse" /></div>
-        : balance !== null ? <div><p className="text-2xl font-bold text-[var(--c-text)] tabular-nums">{formatBalance(balance)}<span className="text-base font-semibold text-[var(--c-text-dim)] ml-1.5">FAI</span></p></div>
+        : balance !== null ? <div><p className="text-2xl font-bold text-[var(--c-text)] tabular-nums">{formatBalance(balance)}<span className="text-base font-semibold text-[var(--c-text-dim)] ml-1.5">GF</span></p></div>
         : <p className="text-xs text-[var(--c-text-dim)]">{t.dashboard.loadBalanceFail}</p>}
       </div>
 
@@ -264,9 +266,9 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
         </div>
         <div className="flex items-center gap-2"><span className="icon-tile icon-tile-pink h-7 w-7"><TrendingUp className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold text-[var(--c-text-dim)]">{t.dashboard.tokenEconomy}</span></div>
         <div className="grid grid-cols-2 gap-2">
-          <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile icon-tile-gold h-7 w-7"><Coins className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold">{t.dashboard.totalSupply}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatBalance(chainStatus.totalSupply ?? 0)} FAI</span></div>
-          <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile icon-tile-blue h-7 w-7"><Activity className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold">{t.dashboard.baseFee}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{(chainStatus.feeMarket?.baseFee ?? 0).toFixed(4)} FAI</span></div>
-          <div className="glass-card p-3 flex flex-col gap-1.5 col-span-2"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile h-7 w-7 shrink-0"><Database className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold truncate">{t.dashboard.storagePrice}</span></div><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatFiat(chainStatus.storagePricing?.basePricePerGiBMonth ?? 0)} FAI</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.perGibMonth}</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.minFee} {(chainStatus.storagePricing?.minimumFee ?? 0).toFixed(4)}</span></div></div>
+          <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile icon-tile-gold h-7 w-7"><Coins className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold">{t.dashboard.totalSupply}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatBalance(chainStatus.totalSupply ?? 0)} GF</span></div>
+          <div className="glass-card p-3 flex flex-col gap-1.5"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile icon-tile-blue h-7 w-7"><Activity className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold">{t.dashboard.baseFee}</span></div><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{(chainStatus.feeMarket?.baseFee ?? 0).toFixed(4)} GF</span></div>
+          <div className="glass-card p-3 flex flex-col gap-1.5 col-span-2"><div className="flex items-center gap-2 text-[var(--c-text-dim)]"><span className="icon-tile h-7 w-7 shrink-0"><Database className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold truncate">{t.dashboard.storagePrice}</span></div><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span className="text-base font-bold text-[var(--c-text)] tabular-nums">{formatFiat(chainStatus.storagePricing?.basePricePerGiBMonth ?? 0)} GF</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.perGibMonth}</span><span className="text-xs text-[var(--c-text-dim)]">{t.dashboard.minFee} {(chainStatus.storagePricing?.minimumFee ?? 0).toFixed(4)}</span></div></div>
         </div>
       </>)}
 

@@ -7,6 +7,7 @@ import {
   Shield,
   PanelRight,
   Share2,
+  Users,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { ChainApi } from '@/lib/api';
@@ -14,7 +15,7 @@ import { useAppStore } from '@/lib/store';
 import WalletSelectorFull from './WalletSelectorFull';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
 
-type Page = 'dashboard' | 'agent-keys' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
+type Page = 'dashboard' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
 
 interface Props {
   currentPage: Page;
@@ -29,6 +30,7 @@ interface Props {
 const navItems: { id: Page; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', icon: LayoutDashboard },
   { id: 'agent-keys', icon: Shield },
+  { id: 'multisig', icon: Users },
   { id: 'upload', icon: ArrowUpCircle },
   { id: 'download', icon: ArrowDownCircle },
   { id: 'share', icon: Share2 },
@@ -71,6 +73,7 @@ export default function Layout({ currentPage, onNavigate, chainNode, chainStatus
   const navLabel: Record<string, string> = {
     dashboard: t.nav.dashboard,
     'agent-keys': t.nav.agentKeys,
+    multisig: 'Multisig',
     upload: t.nav.upload,
     download: t.nav.download,
     share: '分享',

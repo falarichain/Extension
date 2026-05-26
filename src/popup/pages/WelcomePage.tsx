@@ -1,13 +1,9 @@
 import { useState, useRef } from 'react';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, generateId } from '@/lib/store';
 import { generateWallet, importWallet, importWalletFromMnemonic, normalizeAddress } from '@/lib/crypto';
 import { useI18n } from '@/lib/i18n';
 import { Key, ArrowRight, AlertCircle, Eye, EyeOff, Copy, Check, FileText, Shield, RotateCcw } from 'lucide-react';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
-
-function generateId(): string {
-  return `wallet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 export default function WelcomePage({ onWalletCreated }: { onWalletCreated: () => void }) {
   const addAccount = useAppStore((s) => s.addAccount);

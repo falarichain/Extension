@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, generateId } from '@/lib/store';
 import { ChainApi } from '@/lib/api';
 import {
   generateWallet,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/crypto';
 import { useI18n } from '@/lib/i18n';
 import type { WalletGroup, WalletAccount } from '@/lib/types';
+import { TOKEN_UNIT } from '@/lib/types';
 import { X, Plus, Download, Copy, Check, Trash2, Wallet, ChevronRight, ChevronDown, Eye, EyeOff, Key, Shield, AlertCircle, RotateCcw, Pencil } from 'lucide-react';
 
 interface Props {
@@ -27,10 +28,6 @@ type SecretRequest =
   | { type: 'mnemonic'; walletId: string }
   | { type: 'privateKey'; address: string }
   | null;
-
-function generateId(): string {
-  return `wallet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 function truncateAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -134,9 +131,10 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
   const displayBal = (address: string) => {
     const b = balances[address];
     if (b === undefined) return '--';
-    if (b >= 1_000_000) return `${(b / 1_000_000).toFixed(2)}M`;
-    if (b >= 1_000) return `${(b / 1_000).toFixed(2)}K`;
-    return b.toFixed(4);
+    const v = b / TOKEN_UNIT;
+    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+    if (v >= 1_000) return `${(v / 1_000).toFixed(2)}K`;
+    return parseFloat(v.toFixed(8)).toString();
   };
 
   const handleSelectAccount = useCallback((address: string) => {
@@ -682,7 +680,7 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                                       </>
                                     )}
                                   </div>
-                                  <span className="text-[10px] text-[var(--c-text-dim)] tabular-nums">{displayBal(account.address)} FAI</span>
+                                  <span className="text-[10px] text-[var(--c-text-dim)] tabular-nums">{displayBal(account.address)} GF</span>
                                   {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />}
                                 </div>
                                 {isSelected && (
@@ -829,7 +827,7 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                               </>
                             )}
                           </div>
-                          <span className="text-[11px] text-[var(--c-text-dim)]">{displayBal(account.address)} FAI</span>
+                          <span className="text-[11px] text-[var(--c-text-dim)]">{displayBal(account.address)} GF</span>
                         </div>
                       ))}
                     </div>

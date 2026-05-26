@@ -314,7 +314,7 @@ export function UploadPage({ api }: Props) {
                   <div className="w-24 h-5 bg-white/[0.04] rounded animate-pulse mt-0.5" />
                 ) : estimatedFee !== null ? (
                   <p className="text-base font-bold text-[var(--c-text)] tabular-nums">
-                    {estimatedFee.toFixed(4)} <span className="text-sm font-semibold text-[var(--c-text-dim)]">FAI</span>
+                    {estimatedFee.toFixed(4)} <span className="text-sm font-semibold text-[var(--c-text-dim)]">GF</span>
                   </p>
                 ) : (
                   <p className="text-xs text-slate-500 mt-0.5">{t.upload.feeUnavailable}</p>

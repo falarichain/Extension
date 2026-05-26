@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, generateId } from '@/lib/store';
 import { ChainApi } from '@/lib/api';
 import { generateWallet, importWallet, normalizeAddress } from '@/lib/crypto';
 import { useI18n } from '@/lib/i18n';
+import { TOKEN_UNIT } from '@/lib/types';
 import {
   Wallet,
   ChevronDown,
@@ -98,7 +99,7 @@ export default function WalletSelector({ api }: WalletSelectorProps) {
     try {
       const wallet = generateWallet();
       const label = `Account ${accounts.length + 1}`;
-      const walletId = `wallet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const walletId = generateId();
       const newAccount = {
         address: wallet.address,
         publicKey: wallet.publicKey,
@@ -129,7 +130,7 @@ export default function WalletSelector({ api }: WalletSelectorProps) {
         return;
       }
       const label = importLabel.trim() || `Imported ${wallet.address.slice(0, 6)}`;
-      const walletId = `wallet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const walletId = generateId();
       const newAccount = {
         address: wallet.address,
         publicKey: wallet.publicKey,
@@ -180,9 +181,10 @@ export default function WalletSelector({ api }: WalletSelectorProps) {
   const displayBal = (address: string) => {
     const b = balances[address];
     if (b === undefined) return '--';
-    if (b >= 1_000_000) return `${(b / 1_000_000).toFixed(2)}M`;
-    if (b >= 1_000) return `${(b / 1_000).toFixed(2)}K`;
-    return b.toFixed(4);
+    const v = b / TOKEN_UNIT;
+    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+    if (v >= 1_000) return `${(v / 1_000).toFixed(2)}K`;
+    return parseFloat(v.toFixed(8)).toString();
   };
 
   return (
@@ -240,7 +242,7 @@ export default function WalletSelector({ api }: WalletSelectorProps) {
                       <p className="text-[10px] text-[var(--c-text-dimmer)] truncate">{truncateAddress(account.address)}</p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[10px] text-[var(--c-text-dim)] tabular-nums">{displayBal(account.address)} FAI</span>
+                      <span className="text-[10px] text-[var(--c-text-dim)] tabular-nums">{displayBal(account.address)} GF</span>
                       {isSelected && (
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
                       )}

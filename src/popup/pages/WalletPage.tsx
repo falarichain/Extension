@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, generateId } from '@/lib/store';
 import { ChainApi } from '@/lib/api';
 import { normalizeAddress, generateWallet, importWallet, signTransactionHash } from '@/lib/crypto';
 import { useI18n } from '@/lib/i18n';
+import { TOKEN_UNIT } from '@/lib/types';
 import { ethers } from 'ethers';
 import {
   Wallet,
@@ -27,13 +28,10 @@ function truncateAddress(address: string): string {
 }
 
 function formatBalance(amount: number): string {
-  if (amount >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(2)}M`;
-  }
-  if (amount >= 1_000) {
-    return `${(amount / 1_000).toFixed(2)}K`;
-  }
-  return amount.toFixed(4);
+  const v = amount / TOKEN_UNIT;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(2)}K`;
+  return parseFloat(v.toFixed(8)).toString();
 }
 
 export function WalletPage({ api }: WalletPageProps) {
@@ -92,7 +90,7 @@ export function WalletPage({ api }: WalletPageProps) {
     try {
       const wallet = generateWallet();
       const label = `Account ${accounts.length + 1}`;
-      const walletId = `wallet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const walletId = generateId();
       const newAccount = {
         address: wallet.address,
         publicKey: wallet.publicKey,
@@ -122,7 +120,7 @@ export function WalletPage({ api }: WalletPageProps) {
         return;
       }
       const label = importLabel.trim() || `Imported ${wallet.address.slice(0, 6)}`;
-      const walletId = `wallet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const walletId = generateId();
       const newAccount = {
         address: wallet.address,
         publicKey: wallet.publicKey,
@@ -195,6 +193,7 @@ export function WalletPage({ api }: WalletPageProps) {
         setSendError(t.wallet.invalidAmount);
         return;
       }
+      amount = Math.round(amount * TOKEN_UNIT);
     } catch {
       setSendError(t.wallet.invalidAmount);
       return;
@@ -465,7 +464,7 @@ export function WalletPage({ api }: WalletPageProps) {
                     <div className="w-16 h-4 bg-white/[0.04] rounded animate-pulse" />
                   ) : balance !== undefined && !isNaN(balance) ? (
                     <span className="text-[13px] font-semibold text-slate-200 tabular-nums">
-                      {formatBalance(balance)} FAI
+                      {formatBalance(balance)} GF
                     </span>
                   ) : (
                     <span className="text-[11px] text-slate-600">--</span>

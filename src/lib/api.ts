@@ -1,4 +1,4 @@
-import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan } from './types';
+import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan, MultisigWalletInfo, MultisigExecRequest, MultisigWallet } from './types';
 
 const DEFAULT_TIMEOUT = 60000;
 
@@ -411,5 +411,35 @@ export class ChainApi {
       throw new ApiError(`HTTP ${resp.status}`, resp.status);
     }
     return new Uint8Array(await resp.arrayBuffer());
+  }
+
+  // ── Multisig ──
+
+  async createMultisigWallet(payload: {
+    signers: string[];
+    threshold: number;
+    salt: number;
+    signature: string;
+  }): Promise<MultisigWallet> {
+    return request<MultisigWallet>(this.baseUrl, '/multisig', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async getMultisigWallet(address: string): Promise<MultisigWalletInfo> {
+    return request<MultisigWalletInfo>(this.baseUrl, `/multisig/${encodeURIComponent(address)}`);
+  }
+
+  async listMultisigWallets(signer?: string): Promise<{ wallets: MultisigWalletInfo[] }> {
+    const query = signer ? `?signer=${encodeURIComponent(signer)}` : '';
+    return request(this.baseUrl, `/multisig${query}`);
+  }
+
+  async multisigExec(req: MultisigExecRequest): Promise<any> {
+    return request(this.baseUrl, '/multisig/exec', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(req)),
+    });
   }
 }

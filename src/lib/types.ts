@@ -110,6 +110,9 @@ export interface StorageUploadPlan {
   encryptionKey?: string;
 }
 
+/** 1 GF = 10^8 smallest units */
+export const TOKEN_UNIT = 100_000_000;
+
 export const AGENT_KEY_PREFIX = 'fara_';
 
 export const ALLOWED_PERMISSIONS = [
@@ -191,4 +194,48 @@ export interface ShareRecord {
   expiresAtUnix?: number;
   expires_at_unix?: number;
   revoked?: boolean;
+}
+
+// ── Multisig ──
+
+export const MULTISIG_PROPOSAL_PREFIX = 'fms_';
+
+export interface MultisigWallet {
+  address: string;
+  signers: string[];
+  threshold: number;
+  nonce: number;
+  salt: number;
+  created_at_unix: number;
+}
+
+export interface MultisigWalletInfo {
+  wallet: MultisigWallet;
+  balance: number;
+}
+
+export interface MultisigSignature {
+  signer: string;
+  signature: string;
+}
+
+export interface MultisigExecRequest {
+  wallet: string;
+  operation: string;
+  payload: unknown;
+  nonce: number;
+  fee: number;
+  signatures: MultisigSignature[];
+}
+
+export interface MultisigProposal {
+  id: string;
+  wallet: string;
+  operation: string;
+  payload: unknown;
+  nonce: number;
+  fee: number;
+  signatures: MultisigSignature[];
+  status: 'pending' | 'executed' | 'rejected';
+  createdAt: number;
 }

@@ -9,11 +9,12 @@ import { AgentKeysPage } from './pages/AgentKeysPage';
 import { UploadPage } from './pages/UploadPage';
 import { DownloadPage } from './pages/DownloadPage';
 import { SharePage } from './pages/SharePage';
+import { MultisigPage } from './pages/MultisigPage';
 import { SettingsPage } from './pages/SettingsPage';
 import WelcomePage from './pages/WelcomePage';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
 
-type Page = 'dashboard' | 'agent-keys' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
+type Page = 'dashboard' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
 
 export default function App() {
   const loadState = useAppStore((s) => s.loadState);
@@ -121,6 +122,8 @@ export default function App() {
         return <Dashboard api={api} chainStatus={chainStatus} />;
       case 'agent-keys':
         return <AgentKeysPage api={api} />;
+      case 'multisig':
+        return <MultisigPage api={api} />;
       case 'upload':
         return <UploadPage api={api} />;
       case 'download':
