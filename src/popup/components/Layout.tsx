@@ -15,7 +15,7 @@ import { useAppStore } from '@/lib/store';
 import WalletSelectorFull from './WalletSelectorFull';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
 
-type Page = 'dashboard' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
+type Page = 'dashboard' | 'staking' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
 
 interface Props {
   currentPage: Page;

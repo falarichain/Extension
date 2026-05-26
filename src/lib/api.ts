@@ -1,4 +1,4 @@
-import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan, MultisigWalletInfo, MultisigExecRequest, MultisigWallet } from './types';
+import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan, MultisigWalletInfo, MultisigExecRequest, MultisigWallet, ValidatorInfo, StakeDelegation, DelegateStakeResponse, UndelegateStakeResponse } from './types';
 
 const DEFAULT_TIMEOUT = 60000;
 
@@ -440,6 +440,44 @@ export class ChainApi {
     return request(this.baseUrl, '/multisig/exec', {
       method: 'POST',
       body: JSON.stringify(toWirePayload(req)),
+    });
+  }
+
+  // ── Validators & Delegation ──
+
+  async listValidators(): Promise<{ validators: ValidatorInfo[] }> {
+    return request(this.baseUrl, '/validators');
+  }
+
+  async getDelegations(delegator: string): Promise<{ delegations: StakeDelegation[] }> {
+    return request(this.baseUrl, `/validators/delegations?delegator=${encodeURIComponent(delegator)}`);
+  }
+
+  async delegateStake(payload: {
+    delegator: string;
+    validator: string;
+    amount: number;
+    nonce: number;
+    signature: string;
+    publicKey: string;
+  }): Promise<DelegateStakeResponse> {
+    return request(this.baseUrl, '/validators/delegate', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async undelegateStake(payload: {
+    delegator: string;
+    validator: string;
+    amount: number;
+    nonce: number;
+    signature: string;
+    publicKey: string;
+  }): Promise<UndelegateStakeResponse> {
+    return request(this.baseUrl, '/validators/undelegate', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
     });
   }
 }

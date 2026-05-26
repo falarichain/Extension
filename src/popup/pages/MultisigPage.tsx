@@ -44,6 +44,10 @@ function fmtBal(n: number): string {
   return parseFloat(v.toFixed(8)).toString();
 }
 
+function fmtPayloadAmt(n: number): string {
+  return fmtBal(n);
+}
+
 export function MultisigPage({ api }: MultisigPageProps) {
   const accounts = useAppStore((s) => s.accounts);
   const selectedAccount = useAppStore((s) => s.selectedAccount);
@@ -784,13 +788,6 @@ export function MultisigPage({ api }: MultisigPageProps) {
                   )}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
             );
           })}
         </div>

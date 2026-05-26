@@ -38,5 +38,18 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:*/*", "https://*/*"],
+      "js": ["src/content/bridge.ts"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/content/inject.ts"],
+      "matches": ["http://localhost:*/*", "https://*/*"]
+    }
+  ]
 }

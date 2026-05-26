@@ -239,3 +239,46 @@ export interface MultisigProposal {
   status: 'pending' | 'executed' | 'rejected';
   createdAt: number;
 }
+
+// ── Validators & Delegation ──
+
+export interface ValidatorInfo {
+  address: string;
+  public_key: string;
+  endpoint?: string;
+  stake: number;
+  delegated_stake: number;
+  self_stake: number;
+  status: string;
+  consensus: boolean;
+  registered_at_unix: number;
+  produced_blocks: number;
+  slashed: number;
+  evidence_count: number;
+  delegator_count: number;
+  rewards: number;
+  delegation_rewards: number;
+  availability_score_bps: number;
+  commission_rate_bps: number;
+}
+
+export interface StakeDelegation {
+  delegator: string;
+  validator: string;
+  amount: number;
+  since_unix: number;
+}
+
+export interface DelegateStakeResponse {
+  delegator: string;
+  validator: string;
+  amount: number;
+  delegated_stake: number;
+}
+
+export interface UndelegateStakeResponse {
+  delegator: string;
+  validator: string;
+  released: number;
+  delegated_stake: number;
+}

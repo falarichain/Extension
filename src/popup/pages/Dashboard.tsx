@@ -23,11 +23,13 @@ import {
   Copy,
   Check,
   X,
+  ChevronRight,
 } from 'lucide-react';
 
 interface DashboardProps {
   api: ChainApi;
   chainStatus: ChainStatus | null;
+  onNavigateToStaking?: () => void;
 }
 
 function formatBalance(amount: number): string {
@@ -45,14 +47,15 @@ function truncateAddress(address: string): string {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 }
 
-function StatCard({ icon: Icon, label, value, suffix }: {
+function StatCard({ icon: Icon, label, value, suffix, onClick }: {
   icon: typeof Activity;
   label: string;
   value: string;
   suffix?: string;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="glass-card p-3 flex flex-col gap-1.5">
+  const content = (
+    <>
       <div className="flex items-center gap-2 text-[var(--c-text-dim)]">
         <span className="icon-tile h-7 w-7">
           <Icon className="h-4 w-4" strokeWidth={2.4} />
@@ -63,11 +66,24 @@ function StatCard({ icon: Icon, label, value, suffix }: {
         <span className="text-base font-bold text-[var(--c-text)]">{value}</span>
         {suffix && <span className="text-[11px] text-[var(--c-text-dim)]">{suffix}</span>}
       </div>
+      {onClick && <ChevronRight className="w-4 h-4 text-[var(--c-text-dimmer)] absolute right-3 top-1/2 -translate-y-1/2" />}
+    </>
+  );
+  if (onClick) {
+    return (
+      <button onClick={onClick} className="glass-card p-3 flex flex-col gap-1.5 relative cursor-pointer hover:border-[rgba(var(--c-accent-rgb),0.3)] transition-colors text-left w-full">
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div className="glass-card p-3 flex flex-col gap-1.5 relative">
+      {content}
     </div>
   );
 }
 
-export function Dashboard({ api, chainStatus }: DashboardProps) {
+export function Dashboard({ api, chainStatus, onNavigateToStaking }: DashboardProps) {
   const { t } = useI18n();
   const selectedAccount = useAppStore((s) => s.selectedAccount);
   const accounts = useAppStore((s) => s.accounts);
@@ -262,7 +278,7 @@ export function Dashboard({ api, chainStatus }: DashboardProps) {
           <StatCard icon={Zap} label={t.dashboard.activeMiners} value={(chainStatus.activeMiners ?? 0).toLocaleString()} />
           <StatCard icon={Database} label={t.dashboard.deals} value={(chainStatus.deals ?? 0).toLocaleString()} />
           <StatCard icon={Layers} label={t.dashboard.intents} value={(chainStatus.intents ?? 0).toLocaleString()} />
-          <StatCard icon={Shield} label={t.dashboard.validators} value={(chainStatus.validators ?? 0).toLocaleString()} />
+          <StatCard icon={Shield} label={t.dashboard.validators} value={(chainStatus.validators ?? 0).toLocaleString()} onClick={onNavigateToStaking} />
         </div>
         <div className="flex items-center gap-2"><span className="icon-tile icon-tile-pink h-7 w-7"><TrendingUp className="w-4 h-4" strokeWidth={2.5} /></span><span className="text-xs font-semibold text-[var(--c-text-dim)]">{t.dashboard.tokenEconomy}</span></div>
         <div className="grid grid-cols-2 gap-2">

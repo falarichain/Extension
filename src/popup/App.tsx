@@ -11,10 +11,12 @@ import { DownloadPage } from './pages/DownloadPage';
 import { SharePage } from './pages/SharePage';
 import { MultisigPage } from './pages/MultisigPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { StakingPage } from './pages/StakingPage';
 import WelcomePage from './pages/WelcomePage';
+import ApprovalPage from './pages/ApprovalPage';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
 
-type Page = 'dashboard' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
+type Page = 'dashboard' | 'staking' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
 
 export default function App() {
   const loadState = useAppStore((s) => s.loadState);
@@ -92,6 +94,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, [initComplete, isLocked, api]);
 
+  // Approval mode: render standalone approval popup (no store initialization needed)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('mode') === 'approval') {
+    return <ApprovalPage />;
+  }
+
   if (!initComplete) {
     return (
       <I18nProvider>
@@ -119,7 +127,9 @@ export default function App() {
       case 'welcome':
         return <WelcomePage onWalletCreated={() => setPage('dashboard')} />;
       case 'dashboard':
-        return <Dashboard api={api} chainStatus={chainStatus} />;
+        return <Dashboard api={api} chainStatus={chainStatus} onNavigateToStaking={() => setPage('staking')} />;
+      case 'staking':
+        return <StakingPage api={api} onBack={() => setPage('dashboard')} />;
       case 'agent-keys':
         return <AgentKeysPage api={api} />;
       case 'multisig':
@@ -133,7 +143,7 @@ export default function App() {
       case 'settings':
         return <SettingsPage theme={theme} onThemeChange={handleThemeChange} />;
       default:
-        return <Dashboard api={api} chainStatus={chainStatus} />;
+        return <Dashboard api={api} chainStatus={chainStatus} onNavigateToStaking={() => setPage('staking')} />;
     }
   };
 
