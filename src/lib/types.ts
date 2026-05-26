@@ -243,8 +243,9 @@ export interface MultisigProposal {
 // ── Validators & Delegation ──
 
 export interface ValidatorInfo {
-  address: string;
-  public_key: string;
+  owner_address: string;
+  operator_address: string;
+  operator_public_key: string;
   endpoint?: string;
   stake: number;
   delegated_stake: number;

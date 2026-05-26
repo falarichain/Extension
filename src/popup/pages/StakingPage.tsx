@@ -374,21 +374,21 @@ export function StakingPage({ api, onBack }: StakingPageProps) {
           )}
 
           {sortedValidators.map((v) => {
-            const isExpanded = expandedValidator === v.address;
-            const delegation = delegationMap.get(v.address.toLowerCase());
+            const isExpanded = expandedValidator === v.owner_address;
+            const delegation = delegationMap.get(v.owner_address.toLowerCase());
             const availabilityPct = v.availability_score_bps / 100;
             const isAboveMedian = v.produced_blocks >= medianBlocks;
 
             return (
-              <div key={v.address} className={`glass-card ${isExpanded ? 'border-[rgba(var(--c-accent-rgb),0.3)]' : ''}`}>
+              <div key={v.owner_address} className={`glass-card ${isExpanded ? 'border-[rgba(var(--c-accent-rgb),0.3)]' : ''}`}>
                 {/* Validator Header (clickable to expand) */}
                 <button
-                  onClick={() => toggleExpand(v.address)}
+                  onClick={() => toggleExpand(v.owner_address)}
                   className="w-full p-3 flex items-center gap-3 text-left"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-semibold text-[var(--c-text)] truncate">{truncAddr(v.address)}</span>
+                      <span className="text-sm font-semibold text-[var(--c-text)] truncate">{truncAddr(v.owner_address)}</span>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${STATUS_COLORS[v.status] || STATUS_COLORS.exited}`}>
                         {v.status}
                       </span>
@@ -476,11 +476,11 @@ export function StakingPage({ api, onBack }: StakingPageProps) {
                           onChange={(e) => { setDelegateAmount(e.target.value); setError(''); }}
                         />
                         <button
-                          onClick={() => handleDelegate(v.address)}
-                          disabled={actionLoading === `delegate-${v.address}` || !delegateAmount}
+                          onClick={() => handleDelegate(v.owner_address)}
+                          disabled={actionLoading === `delegate-${v.owner_address}` || !delegateAmount}
                           className="btn-primary px-4 py-2 text-xs font-semibold whitespace-nowrap disabled:opacity-50"
                         >
-                          {actionLoading === `delegate-${v.address}` ? (
+                          {actionLoading === `delegate-${v.owner_address}` ? (
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                           ) : t.staking.delegate}
                         </button>
@@ -503,11 +503,11 @@ export function StakingPage({ api, onBack }: StakingPageProps) {
                             onChange={(e) => { setUndelegateAmount(e.target.value); setError(''); }}
                           />
                           <button
-                            onClick={() => handleUndelegate(v.address)}
-                            disabled={actionLoading === `undelegate-${v.address}` || !undelegateAmount}
+                            onClick={() => handleUndelegate(v.owner_address)}
+                            disabled={actionLoading === `undelegate-${v.owner_address}` || !undelegateAmount}
                             className="btn-secondary px-4 py-2 text-xs font-semibold whitespace-nowrap disabled:opacity-50"
                           >
-                            {actionLoading === `undelegate-${v.address}` ? (
+                            {actionLoading === `undelegate-${v.owner_address}` ? (
                               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             ) : t.staking.undelegate}
                           </button>
@@ -534,7 +534,7 @@ export function StakingPage({ api, onBack }: StakingPageProps) {
           )}
 
           {delegations.map((d) => {
-            const validator = validators.find((v) => v.address.toLowerCase() === d.validator.toLowerCase());
+            const validator = validators.find((v) => v.owner_address.toLowerCase() === d.validator.toLowerCase());
             const isExpanded = expandedValidator === d.validator;
 
             return (
