@@ -1,6 +1,7 @@
 const en = {
   nav: {
     dashboard: 'Dashboard',
+    bridge: 'Bridge',
     agentKeys: 'Agent Keys',
     upload: 'Upload',
     download: 'Download',
@@ -369,6 +370,28 @@ const en = {
     undelegateFail: 'Undelegation failed',
     invalidAmount: 'Invalid amount',
     viewStaking: 'View Staking',
+  },
+  bridge: {
+    title: 'Cross-Chain Bridge',
+    falariToEth: 'Falari → Ethereum',
+    amount: 'Amount (FAL)',
+    ethRecipient: 'ETH Recipient Address',
+    bridgeBtn: 'Bridge to Ethereum',
+    bridging: 'Bridging...',
+    success: 'Bridge request submitted',
+    fail: 'Bridge request failed',
+    pendingOps: 'Pending Operations',
+    noPending: 'No pending bridge operations',
+    minAmount: 'Min Amount',
+    delay: 'Delay',
+    poolAddress: 'Pool',
+    bridgePaused: 'Bridge is currently paused',
+    insufficientBalance: 'Insufficient balance',
+    invalidRecipient: 'Invalid Ethereum address',
+    belowMinimum: 'Amount below minimum',
+    pkNotFound: 'Private key not found',
+    noAccount: 'No account selected',
+    invalidAmount: 'Invalid amount',
   },
 } as const;
 

@@ -12,11 +12,12 @@ import { SharePage } from './pages/SharePage';
 import { MultisigPage } from './pages/MultisigPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StakingPage } from './pages/StakingPage';
+import { BridgePage } from './pages/BridgePage';
 import WelcomePage from './pages/WelcomePage';
 import ApprovalPage from './pages/ApprovalPage';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
 
-type Page = 'dashboard' | 'staking' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
+type Page = 'dashboard' | 'staking' | 'bridge' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
 
 export default function App() {
   const loadState = useAppStore((s) => s.loadState);
@@ -130,6 +131,8 @@ export default function App() {
         return <Dashboard api={api} chainStatus={chainStatus} onNavigateToStaking={() => setPage('staking')} />;
       case 'staking':
         return <StakingPage api={api} onBack={() => setPage('dashboard')} />;
+      case 'bridge':
+        return <BridgePage api={api} />;
       case 'agent-keys':
         return <AgentKeysPage api={api} />;
       case 'multisig':

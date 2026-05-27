@@ -1,4 +1,4 @@
-import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan, MultisigWalletInfo, MultisigExecRequest, MultisigWallet, ValidatorInfo, StakeDelegation, DelegateStakeResponse, UndelegateStakeResponse } from './types';
+import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan, MultisigWalletInfo, MultisigExecRequest, MultisigWallet, ValidatorInfo, StakeDelegation, DelegateStakeResponse, UndelegateStakeResponse, BridgeConfig, BridgeOutbound, BridgePendingResponse } from './types';
 
 const DEFAULT_TIMEOUT = 60000;
 
@@ -479,5 +479,35 @@ export class ChainApi {
       method: 'POST',
       body: JSON.stringify(toWirePayload(payload)),
     });
+  }
+
+  // ── Bridge ──
+
+  async getBridgeConfig(): Promise<BridgeConfig> {
+    return request<BridgeConfig>(this.baseUrl, '/bridge/config');
+  }
+
+  async bridgeOut(payload: {
+    sender: string;
+    recipient: string;
+    targetChainId: string;
+    amount: number;
+    fee: number;
+    nonce: number;
+    signature: string;
+    publicKey: string;
+  }): Promise<{ nonce: number; sender: { address: string; balance: number } }> {
+    return request(this.baseUrl, '/bridge/out', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async getBridgePending(): Promise<BridgePendingResponse> {
+    return request<BridgePendingResponse>(this.baseUrl, '/bridge/pending');
+  }
+
+  async getBridgeOutbound(nonce: number): Promise<BridgeOutbound> {
+    return request<BridgeOutbound>(this.baseUrl, `/bridge/outbound/${nonce}`);
   }
 }

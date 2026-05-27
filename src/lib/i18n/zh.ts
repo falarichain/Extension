@@ -3,6 +3,7 @@ import type { Locale } from './en';
 const zh: Locale = {
   nav: {
     dashboard: '仪表盘',
+    bridge: '跨链桥',
     agentKeys: 'Agent Key',
     upload: '上传',
     download: '下载',
@@ -368,6 +369,28 @@ const zh: Locale = {
     undelegateFail: '解除委托失败',
     invalidAmount: '金额无效',
     viewStaking: '查看质押',
+  },
+  bridge: {
+    title: '跨链桥',
+    falariToEth: 'Falari → Ethereum',
+    amount: '金额 (FAL)',
+    ethRecipient: 'ETH 接收地址',
+    bridgeBtn: '跨链到 Ethereum',
+    bridging: '跨链中...',
+    success: '跨链请求已提交',
+    fail: '跨链请求失败',
+    pendingOps: '进行中的操作',
+    noPending: '暂无跨链操作',
+    minAmount: '最小金额',
+    delay: '延迟',
+    poolAddress: '资金池',
+    bridgePaused: '跨链桥已暂停',
+    insufficientBalance: '余额不足',
+    invalidRecipient: '无效的 ETH 地址',
+    belowMinimum: '金额低于最小限额',
+    pkNotFound: '未找到私钥',
+    noAccount: '未选择账户',
+    invalidAmount: '金额无效',
   },
 } as const;
 

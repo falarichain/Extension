@@ -75,6 +75,8 @@ export interface ChainStatus {
   storagePricing: { basePricePerGiBMonth: number; minimumFee: number };
   totalSupply: number;
   peerCount: number;
+  chainId?: string;
+  chain_id?: string;
 }
 
 export interface StorageIntentView {
@@ -282,4 +284,48 @@ export interface UndelegateStakeResponse {
   validator: string;
   released: number;
   delegated_stake: number;
+}
+
+// ── Bridge ──
+
+export interface BridgeConfig {
+  enabled: boolean;
+  bridgePoolAddress: string;
+  relayerAddress: string;
+  minBridgeAmount: number;
+  delaySeconds: number;
+  maxAmountPerDay: number;
+  currentDayAmount: number;
+  dayStartUnix: number;
+  paused: boolean;
+  chainId: string;
+  targetChainId: string;
+}
+
+export interface BridgeOutbound {
+  nonce: number;
+  targetChainId: string;
+  sender: string;
+  recipient: string;
+  amount: number;
+  fee: number;
+  status: string;
+  lockedAtUnix: number;
+  claimableAfter: number;
+}
+
+export interface BridgeInbound {
+  nonce: number;
+  sourceTxHash: string;
+  sourceBlockNumber: number;
+  recipient: string;
+  amount: number;
+  status: string;
+  detectedAtUnix: number;
+  claimableAfter: number;
+}
+
+export interface BridgePendingResponse {
+  outbounds: BridgeOutbound[];
+  inbounds: BridgeInbound[];
 }
