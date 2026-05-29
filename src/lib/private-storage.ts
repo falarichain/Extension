@@ -41,6 +41,7 @@ export async function uploadPrivateFile(
     dataShards?: number;
     parityShards?: number;
     duration?: number;
+    dataKeyBase64?: string;
     ownerWrapKeyBase64?: string;
     ownerPrivateKey?: string;
     ownerAddress?: string;
@@ -51,7 +52,10 @@ export async function uploadPrivateFile(
   const parityShards = options.parityShards ?? 1;
   const duration = options.duration ?? 86400;
   const plaintext = new Uint8Array(await file.arrayBuffer());
-  const dataKey = randomBytes(32);
+  const dataKey = options.dataKeyBase64 ? base64ToBytes(options.dataKeyBase64) : randomBytes(32);
+  if (dataKey.length !== 32) {
+    throw new Error('data key must be exactly 32 bytes (256-bit)');
+  }
   const nonceBase = randomBytes(32);
   const nonceBase64 = bytesToBase64(nonceBase);
   const keyHash = await sha256Hex(dataKey);
@@ -192,6 +196,7 @@ export async function downloadPrivateFile(
   intentId: string,
   options: {
     dataKeyBase64?: string;
+    vaultKeyBase64?: string;
     owner?: string;
     ownerPrivateKey?: string;
   },
@@ -204,7 +209,9 @@ export async function downloadPrivateFile(
   }
   const key = options.dataKeyBase64
     ? base64ToBytes(options.dataKeyBase64)
-    : await recoverOwnerDataKey(api, intentId, options.owner || '', options.ownerPrivateKey || '');
+    : options.vaultKeyBase64
+      ? await recoverDataKeyWithVaultKey(api, intentId, options.owner || '', base64ToBytes(options.vaultKeyBase64))
+      : await recoverOwnerDataKey(api, intentId, options.owner || '', options.ownerPrivateKey || '');
   const keyHash = await sha256Hex(key);
   if (strip0x(encryption.keyHash ?? encryption.key_hash) !== keyHash) {
     throw new Error('data key does not match manifest');
@@ -485,6 +492,19 @@ async function recoverOwnerDataKey(
   if (!owner || !masterPrivateKey) {
     throw new Error('owner and master private key are required to recover the data key');
   }
+  const vaultKey = await deriveStorageVaultKey(masterPrivateKey, owner);
+  return recoverDataKeyWithVaultKey(api, intentId, owner, vaultKey);
+}
+
+async function recoverDataKeyWithVaultKey(
+  api: ChainApi,
+  intentId: string,
+  owner: string,
+  vaultKey: Uint8Array,
+): Promise<Uint8Array> {
+  if (!owner) {
+    throw new Error('owner is required to recover the data key');
+  }
   const resp = await api.listKeyEnvelopes({
     intentId,
     recipient: owner,
@@ -499,8 +519,45 @@ async function recoverOwnerDataKey(
   }
   const algorithm = envelope.algorithm || OWNER_WRAP_ALGORITHM;
   const encryptedDataKey = envelope.encryptedDataKey || envelope.encrypted_data_key || '';
-  const vaultKey = await deriveStorageVaultKey(masterPrivateKey, owner);
   return unwrapDataKey(encryptedDataKey, envelope.nonce || '', vaultKey, algorithm);
+}
+
+export async function downloadAllPrivateFiles(
+  api: ChainApi,
+  owner: string,
+  vaultKeyBase64: string,
+  options: {
+    onProgress?: (intentId: string, index: number, total: number) => void;
+  } = {},
+): Promise<{ intentId: string; fileName: string; data: Uint8Array }[]> {
+  if (!owner || !vaultKeyBase64) {
+    throw new Error('owner and vaultKeyBase64 are required');
+  }
+  const resp = await api.listKeyEnvelopes({
+    recipient: owner,
+    recipientType: 'owner',
+  });
+  const envelopes = resp.envelopes.filter((item) => {
+    const recipientType = item.recipientType || item.recipient_type;
+    return recipientType === 'owner';
+  });
+  const results: { intentId: string; fileName: string; data: Uint8Array }[] = [];
+  for (let i = 0; i < envelopes.length; i++) {
+    const envelope = envelopes[i];
+    const intentId = envelope.intentId || envelope.intent_id || '';
+    if (!intentId) continue;
+    options.onProgress?.(intentId, i, envelopes.length);
+    try {
+      const file = await downloadPrivateFile(api, intentId, {
+        vaultKeyBase64,
+        owner,
+      });
+      results.push({ intentId, ...file });
+    } catch {
+      // skip files that fail to decrypt or download
+    }
+  }
+  return results;
 }
 
 async function deriveStorageVaultKey(masterPrivateKey: string, ownerAddress: string): Promise<Uint8Array> {

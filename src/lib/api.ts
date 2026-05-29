@@ -1,4 +1,4 @@
-import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan, MultisigWalletInfo, MultisigExecRequest, MultisigWallet, ValidatorInfo, StakeDelegation, DelegateStakeResponse, UndelegateStakeResponse, BridgeConfig, BridgeOutbound, BridgePendingResponse } from './types';
+import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageUploadPlan, MultisigWalletInfo, MultisigExecRequest, MultisigWallet, ValidatorInfo, StakeDelegation, DelegateStakeResponse, UndelegateStakeResponse, BridgeConfig, BridgeOutbound, BridgePendingResponse, CollectionResponse, CollectionRecordsResponse, CollectionRecordFilter, UserCollectionsResponse } from './types';
 
 const DEFAULT_TIMEOUT = 60000;
 
@@ -329,6 +329,7 @@ export class ChainApi {
   }
 
   async registerAgentKey(payload: {
+    chainId: string;
     master: string;
     name: string;
     agentPub: string;
@@ -336,6 +337,7 @@ export class ChainApi {
     dailyLimit: number;
     totalLimit: number;
     expiresAt: number;
+    nonce: number;
     signature: string;
   }): Promise<{ key: any }> {
     return request(this.baseUrl, '/agent-keys', {
@@ -349,12 +351,41 @@ export class ChainApi {
   }
 
   async revokeAgentKey(payload: {
+    chainId: string;
     keyId: string;
     master: string;
     nonce: number;
     signature: string;
   }): Promise<void> {
     return request(this.baseUrl, '/agent-keys/revoke', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async extendAgentKey(payload: {
+    chainId: string;
+    keyId: string;
+    master: string;
+    expiresAt: number;
+    nonce: number;
+    signature: string;
+  }): Promise<any> {
+    return request(this.baseUrl, '/agent-keys/extend', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  async topupAgentKey(payload: {
+    chainId: string;
+    keyId: string;
+    master: string;
+    totalLimit: number;
+    nonce: number;
+    signature: string;
+  }): Promise<any> {
+    return request(this.baseUrl, '/agent-keys/topup', {
       method: 'POST',
       body: JSON.stringify(toWirePayload(payload)),
     });
@@ -476,6 +507,48 @@ export class ChainApi {
     publicKey: string;
   }): Promise<UndelegateStakeResponse> {
     return request(this.baseUrl, '/validators/undelegate', {
+      method: 'POST',
+      body: JSON.stringify(toWirePayload(payload)),
+    });
+  }
+
+  // ── Collections ──
+
+  async getCollection(collectionId: string): Promise<CollectionResponse> {
+    return request<CollectionResponse>(this.baseUrl, `/collections/${encodeURIComponent(collectionId)}`);
+  }
+
+  async getCollectionRecords(collectionId: string, filter?: CollectionRecordFilter): Promise<CollectionRecordsResponse> {
+    const params = new URLSearchParams();
+    if (filter) {
+      if (filter.kind) params.set('kind', filter.kind);
+      if (filter.key) params.set('key', filter.key);
+      if (filter.parent_record) params.set('parent', filter.parent_record);
+      if (filter.after_unix != null) params.set('after', String(filter.after_unix));
+      if (filter.before_unix != null) params.set('before', String(filter.before_unix));
+      if (filter.limit != null) params.set('limit', String(filter.limit));
+      if (filter.reverse) params.set('reverse', 'true');
+    }
+    const qs = params.toString();
+    const path = `/collections/${encodeURIComponent(collectionId)}/records${qs ? `?${qs}` : ''}`;
+    return request<CollectionRecordsResponse>(this.baseUrl, path);
+  }
+
+  async listUserCollections(user: string): Promise<UserCollectionsResponse> {
+    return request<UserCollectionsResponse>(this.baseUrl, `/user-collections?user=${encodeURIComponent(user)}`);
+  }
+
+  async createCollection(payload: {
+    chainId: string;
+    user: string;
+    name: string;
+    description?: string;
+    metadata?: Record<string, string>;
+    nonce: number;
+    publicKey: string;
+    signature: string;
+  }): Promise<CollectionResponse> {
+    return request<CollectionResponse>(this.baseUrl, '/collections', {
       method: 'POST',
       body: JSON.stringify(toWirePayload(payload)),
     });

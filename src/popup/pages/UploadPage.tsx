@@ -14,6 +14,8 @@ import {
   Loader2,
   Activity,
   Coins,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface Props {
@@ -71,9 +73,10 @@ export function UploadPage({ api }: Props) {
   const [accessMode, setAccessMode] = useState<'private' | 'public'>('private');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
-  const [result, setResult] = useState<{ intentId: string; dealId: string } | null>(null);
+  const [result, setResult] = useState<{ intentId: string; dealId: string; dataKeyBase64?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [copiedDataKey, setCopiedDataKey] = useState(false);
 
   const [estimatedFee, setEstimatedFee] = useState<number | null>(null);
   const [feeLoading, setFeeLoading] = useState(false);
@@ -190,7 +193,7 @@ export function UploadPage({ api }: Props) {
             currentSegment: 0,
           }),
         });
-        setResult({ intentId: res.intentId, dealId: res.dealId });
+        setResult({ intentId: res.intentId, dealId: res.dealId, dataKeyBase64: res.dataKeyBase64 });
       } else {
         const res = await uploadFile(api, file, selectedAccount, {
           dataShards: DATA_SHARDS,
@@ -259,6 +262,45 @@ export function UploadPage({ api }: Props) {
               </span>
             </div>
           </div>
+          {result.dataKeyBase64 && (
+            <div className="w-full rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-blue-300">
+                  {t.wallet.dataKeyLabel}
+                </span>
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(result.dataKeyBase64!);
+                    } catch {
+                      const ta = document.createElement('textarea');
+                      ta.value = result.dataKeyBase64!;
+                      document.body.appendChild(ta);
+                      ta.select();
+                      document.execCommand('copy');
+                      document.body.removeChild(ta);
+                    }
+                    setCopiedDataKey(true);
+                    setTimeout(() => setCopiedDataKey(false), 2000);
+                  }}
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-blue-300/80 hover:bg-blue-500/10 hover:text-blue-300"
+                >
+                  {copiedDataKey ? (
+                    <Check className="h-3 w-3 text-green-400" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copiedDataKey ? t.wallet.copiedSecret : t.dashboard.copyAddress}
+                </button>
+              </div>
+              <code className="block break-all text-[10px] leading-relaxed text-blue-300">
+                {result.dataKeyBase64}
+              </code>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-blue-300/70">
+                {t.wallet.dataKeyWarning}
+              </p>
+            </div>
+          )}
           <button className="btn-secondary w-full mt-1" onClick={resetState}>
             {t.upload.uploadAnother}
           </button>

@@ -8,7 +8,7 @@ import {
   updateAgentKeyEncodedString,
 } from '@/lib/agent-key';
 import type { LocalAgentKey } from '@/lib/types';
-import { ALLOWED_PERMISSIONS } from '@/lib/types';
+import { ALLOWED_PERMISSIONS, MAX_AGENT_KEY_PERMISSIONS, PERMISSION_PRESETS } from '@/lib/types';
 import { useI18n } from '@/lib/i18n';
 import {
   Shield,
@@ -70,7 +70,7 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
   const [revokeError, setRevokeError] = useState('');
 
   const [name, setName] = useState('');
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([...ALLOWED_PERMISSIONS]);
   const [dailyLimit, setDailyLimit] = useState('100');
   const [totalLimit, setTotalLimit] = useState('10000');
   const [expiresInDays, setExpiresInDays] = useState('30');
@@ -195,6 +195,10 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
     }
     if (selectedPermissions.length === 0) {
       setCreateError(t.agentKeys.permRequired);
+      return;
+    }
+    if (selectedPermissions.length > MAX_AGENT_KEY_PERMISSIONS) {
+      setCreateError(t.agentKeys.permMax.replace('{max}', String(MAX_AGENT_KEY_PERMISSIONS)));
       return;
     }
 
@@ -736,28 +740,84 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] text-slate-500">{t.agentKeys.permissions}</label>
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] text-slate-500">{t.agentKeys.permissions}</label>
+              <span className={`text-[10px] tabular-nums ${selectedPermissions.length > MAX_AGENT_KEY_PERMISSIONS ? 'text-red-400' : 'text-slate-500'}`}>
+                {selectedPermissions.length}/{MAX_AGENT_KEY_PERMISSIONS}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {PERMISSION_PRESETS.map((preset) => {
+                const allSelected = preset.permissions.every((p) => selectedPermissions.includes(p));
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPermissions((prev) => {
+                        if (allSelected) {
+                          return prev.filter((p) => !preset.permissions.includes(p));
+                        }
+                        const merged = [...new Set([...prev, ...preset.permissions])];
+                        return merged;
+                      });
+                      setCreateError('');
+                    }}
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-all ${
+                      allSelected
+                        ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+                        : 'bg-white/[0.02] border-white/[0.08] text-slate-400 hover:border-white/[0.15]'
+                    }`}
+                  >
+                    {(t.agentKeys.permPresets as Record<string, string>)[preset.key] || preset.key}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedPermissions((prev) =>
+                    prev.length === ALLOWED_PERMISSIONS.length ? [] : [...ALLOWED_PERMISSIONS],
+                  );
+                  setCreateError('');
+                }}
+                className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-all ${
+                  selectedPermissions.length === ALLOWED_PERMISSIONS.length
+                    ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+                    : 'bg-white/[0.02] border-white/[0.08] text-slate-400 hover:border-white/[0.15]'
+                }`}
+              >
+                {t.agentKeys.permPresetAll}
+              </button>
+            </div>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-1.5">
               {ALLOWED_PERMISSIONS.map((perm) => {
                 const checked = selectedPermissions.includes(perm);
+                const atMax = selectedPermissions.length >= MAX_AGENT_KEY_PERMISSIONS;
                 return (
                   <label
                     key={perm}
                     className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
                       checked
                         ? 'bg-purple-500/10 border-purple-500/30'
-                        : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]'
+                        : atMax
+                          ? 'bg-white/[0.02] border-white/[0.04] opacity-50'
+                          : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => {
-                        setSelectedPermissions((prev) =>
-                          checked
-                            ? prev.filter((p) => p !== perm)
-                            : [...prev, perm],
-                        );
+                        setSelectedPermissions((prev) => {
+                          if (checked) {
+                            return prev.filter((p) => p !== perm);
+                          }
+                          if (prev.length >= MAX_AGENT_KEY_PERMISSIONS) {
+                            return prev;
+                          }
+                          return [...prev, perm];
+                        });
                         setCreateError('');
                       }}
                       className="sr-only"

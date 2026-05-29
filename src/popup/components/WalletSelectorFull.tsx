@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore, generateId } from '@/lib/store';
 import { ChainApi } from '@/lib/api';
+import { deriveStorageVaultKeyBase64 } from '@/lib/private-storage';
 import {
   generateWallet,
   importWallet,
@@ -27,6 +28,7 @@ type EditingName =
 type SecretRequest =
   | { type: 'mnemonic'; walletId: string }
   | { type: 'privateKey'; address: string }
+  | { type: 'vaultKey'; address: string }
   | null;
 
 function truncateAddress(address: string): string {
@@ -60,6 +62,8 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
   const [backupMnemonic, setBackupMnemonic] = useState('');
   const [visiblePrivateKeyAddress, setVisiblePrivateKeyAddress] = useState<string | null>(null);
   const [exportedPrivateKeys, setExportedPrivateKeys] = useState<Record<string, string>>({});
+  const [visibleVaultKeyAddress, setVisibleVaultKeyAddress] = useState<string | null>(null);
+  const [exportedVaultKeys, setExportedVaultKeys] = useState<Record<string, string>>({});
   const [copiedSecret, setCopiedSecret] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<EditingName>(null);
   const [renameError, setRenameError] = useState('');
@@ -288,6 +292,18 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
     setSecretPasswordError('');
   }, [visiblePrivateKeyAddress]);
 
+  const handleExportVaultKey = useCallback(async (address: string) => {
+    setWalletNotice(null);
+    if (visibleVaultKeyAddress === address) {
+      setVisibleVaultKeyAddress(null);
+      return;
+    }
+
+    setSecretRequest({ type: 'vaultKey', address });
+    setSecretPassword('');
+    setSecretPasswordError('');
+  }, [visibleVaultKeyAddress]);
+
   const handleConfirmSecretPassword = useCallback(async () => {
     if (!secretRequest) return;
     if (!secretPassword.trim()) {
@@ -312,7 +328,7 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
         }
         setBackupMnemonicWalletId(secretRequest.walletId);
         setBackupMnemonic(mnemonic);
-      } else {
+      } else if (secretRequest.type === 'privateKey') {
         const privateKey = await getPrivateKey(secretRequest.address);
         if (!privateKey) {
           setWalletNotice({ type: 'error', text: t.wallet.privateKeyNotFound });
@@ -321,6 +337,16 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
         }
         setExportedPrivateKeys((prev) => ({ ...prev, [secretRequest.address]: privateKey }));
         setVisiblePrivateKeyAddress(secretRequest.address);
+      } else if (secretRequest.type === 'vaultKey') {
+        const privateKey = await getPrivateKey(secretRequest.address);
+        if (!privateKey) {
+          setWalletNotice({ type: 'error', text: t.wallet.privateKeyNotFound });
+          closeSecretPassword();
+          return;
+        }
+        const vk = await deriveStorageVaultKeyBase64(privateKey, secretRequest.address);
+        setExportedVaultKeys((prev) => ({ ...prev, [secretRequest.address]: vk }));
+        setVisibleVaultKeyAddress(secretRequest.address);
       }
 
       closeSecretPassword();
@@ -703,6 +729,20 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                                       )}
                                       {visiblePrivateKeyAddress === account.address ? t.wallet.hideSecret : t.wallet.exportPrivateKey}
                                     </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleExportVaultKey(account.address);
+                                      }}
+                                      className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-[var(--c-text-dim)] hover:bg-[var(--c-surface-hover)] hover:text-amber-300"
+                                    >
+                                      {visibleVaultKeyAddress === account.address ? (
+                                        <EyeOff className="h-3 w-3" />
+                                      ) : (
+                                        <Shield className="h-3 w-3" />
+                                      )}
+                                      {visibleVaultKeyAddress === account.address ? t.wallet.hideSecret : t.wallet.exportVaultKey}
+                                    </button>
                                     {isDeletingAddr ? (
                                       <div className="flex gap-1 ml-auto">
                                         <button onClick={(e) => { e.stopPropagation(); handleDeleteAddress(account.address); }} className="px-2 py-1 rounded text-[10px] bg-red-500/20 text-red-400">Confirm</button>
@@ -744,6 +784,37 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                                       </code>
                                       <p className="mt-1 text-[10px] leading-relaxed text-red-300/80">
                                         {t.wallet.backupWarning}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                                {visibleVaultKeyAddress === account.address && exportedVaultKeys[account.address] && (
+                                  <div className="px-2 pb-2 pl-8">
+                                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2">
+                                      <div className="mb-1 flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-semibold text-amber-300">
+                                          {t.wallet.exportVaultKey}
+                                        </span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCopySecret(exportedVaultKeys[account.address], `vk-${account.address}`);
+                                          }}
+                                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-amber-300/80 hover:bg-amber-500/10 hover:text-amber-300"
+                                        >
+                                          {copiedSecret === `vk-${account.address}` ? (
+                                            <Check className="h-3 w-3 text-green-400" />
+                                          ) : (
+                                            <Copy className="h-3 w-3" />
+                                          )}
+                                          {copiedSecret === `vk-${account.address}` ? t.wallet.copiedSecret : t.dashboard.copyAddress}
+                                        </button>
+                                      </div>
+                                      <code className="block break-all text-[10px] leading-relaxed text-amber-300">
+                                        {exportedVaultKeys[account.address]}
+                                      </code>
+                                      <p className="mt-1 text-[10px] leading-relaxed text-amber-300/80">
+                                        {t.wallet.vaultKeyWarning}
                                       </p>
                                     </div>
                                   </div>
@@ -981,7 +1052,7 @@ export default function WalletSelectorFull({ open, onClose, api }: Props) {
                 <div>
                   <p className="text-sm font-bold text-[var(--c-text)]">{t.wallet.confirmPasswordTitle}</p>
                   <p className="text-[11px] text-[var(--c-text-dim)]">
-                    {secretRequest.type === 'mnemonic' ? t.wallet.backupMnemonic : t.wallet.exportPrivateKey}
+                    {secretRequest.type === 'mnemonic' ? t.wallet.backupMnemonic : secretRequest.type === 'vaultKey' ? t.wallet.exportVaultKey : t.wallet.exportPrivateKey}
                   </p>
                 </div>
               </div>

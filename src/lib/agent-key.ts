@@ -1,16 +1,7 @@
-import type { LocalAgentKey, WalletAccount } from './types';
-import { generateAgentKeyPair, encodeAgentKeyString } from './crypto';
+import type { LocalAgentKey } from './types';
+import { generateAgentKeyPair, encodeAgentKeyString, normalizeAddress } from './crypto';
 import { ChainApi } from './api';
 import { ethers } from 'ethers';
-
-function computeAgentKeyId(master: string, nonce: number): string {
-  const payload = JSON.stringify({ master: master.toLowerCase(), nonce });
-  const hash = ethers.sha256(ethers.toUtf8Bytes(payload));
-  return 'key_' + btoa(hash.slice(2).slice(0, 16))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
 
 export async function generateLocalAgentKey(
   master: string,
@@ -47,22 +38,26 @@ export async function generateLocalAgentKey(
 }
 
 export async function computeRegisterAgentKeySignature(
+  chainId: string,
   master: string,
   agentPub: string,
   permissions: string[],
   dailyLimit: number,
   totalLimit: number,
   expiresAt: number,
+  nonce: number,
   masterPrivateKey: string,
 ): Promise<string> {
   const wallet = new ethers.Wallet(masterPrivateKey);
   const payload = {
-    master: master.toLowerCase(),
+    chain_id: chainId,
+    master: normalizeAddress(master),
     agent_pub: agentPub,
-    permissions,
+    permissions: [...permissions].sort(),
     daily_limit: dailyLimit,
     total_limit: totalLimit,
     expires_at: expiresAt,
+    nonce,
   };
   const hash = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(payload)));
   return wallet.signingKey.sign(ethers.getBytes(hash)).serialized;
@@ -74,18 +69,28 @@ export async function registerAgentKey(
   masterPrivateKey: string,
 ): Promise<{ success: boolean; keyId: string; error?: string }> {
   try {
+    const [status, account] = await Promise.all([
+      api.getStatus(),
+      api.getAccount(key.master),
+    ]);
+    const chainId = status.chainId || status.chain_id || '';
+    const nonce = account.nonce;
+
     const agentPub = new ethers.Wallet(key.privateKey).signingKey.publicKey;
     const signature = await computeRegisterAgentKeySignature(
+      chainId,
       key.master,
       agentPub,
       key.permissions,
       key.dailyLimit,
       key.totalLimit,
       key.expiresAt,
+      nonce,
       masterPrivateKey,
     );
 
     const result = await api.registerAgentKey({
+      chainId,
       master: key.master,
       name: key.name,
       agentPub,
@@ -93,6 +98,7 @@ export async function registerAgentKey(
       dailyLimit: key.dailyLimit,
       totalLimit: key.totalLimit,
       expiresAt: key.expiresAt,
+      nonce,
       signature,
     });
 
@@ -109,21 +115,109 @@ export async function revokeAgentKey(
   masterPrivateKey: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const account = await api.getAccount(master);
+    const [status, account] = await Promise.all([
+      api.getStatus(),
+      api.getAccount(master),
+    ]);
+    const chainId = status.chainId || status.chain_id || '';
     const nonce = account.nonce;
 
     const wallet = new ethers.Wallet(masterPrivateKey);
     const payload = {
+      chain_id: chainId,
       key_id: keyId,
-      master: master.toLowerCase(),
+      master: normalizeAddress(master),
       nonce,
     };
     const hash = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(payload)));
     const signature = wallet.signingKey.sign(ethers.getBytes(hash)).serialized;
 
     await api.revokeAgentKey({
+      chainId,
       keyId,
       master,
+      nonce,
+      signature,
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+export async function extendAgentKey(
+  api: ChainApi,
+  keyId: string,
+  master: string,
+  expiresAt: number,
+  masterPrivateKey: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [status, account] = await Promise.all([
+      api.getStatus(),
+      api.getAccount(master),
+    ]);
+    const chainId = status.chainId || status.chain_id || '';
+    const nonce = account.nonce;
+
+    const wallet = new ethers.Wallet(masterPrivateKey);
+    const payload = {
+      chain_id: chainId,
+      key_id: keyId,
+      master: normalizeAddress(master),
+      expires_at: expiresAt,
+      nonce,
+    };
+    const hash = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(payload)));
+    const signature = wallet.signingKey.sign(ethers.getBytes(hash)).serialized;
+
+    await api.extendAgentKey({
+      chainId,
+      keyId,
+      master,
+      expiresAt,
+      nonce,
+      signature,
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+export async function topupAgentKey(
+  api: ChainApi,
+  keyId: string,
+  master: string,
+  totalLimit: number,
+  masterPrivateKey: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [status, account] = await Promise.all([
+      api.getStatus(),
+      api.getAccount(master),
+    ]);
+    const chainId = status.chainId || status.chain_id || '';
+    const nonce = account.nonce;
+
+    const wallet = new ethers.Wallet(masterPrivateKey);
+    const payload = {
+      chain_id: chainId,
+      key_id: keyId,
+      master: normalizeAddress(master),
+      total_limit: totalLimit,
+      nonce,
+    };
+    const hash = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(payload)));
+    const signature = wallet.signingKey.sign(ethers.getBytes(hash)).serialized;
+
+    await api.topupAgentKey({
+      chainId,
+      keyId,
+      master,
+      totalLimit,
       nonce,
       signature,
     });
@@ -184,4 +278,42 @@ export async function signQueryPayload(
   const wallet = new ethers.Wallet(agentPrivateKey);
   const hash = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(payload)));
   return wallet.signingKey.sign(ethers.getBytes(hash)).serialized;
+}
+
+export async function createCollection(
+  api: ChainApi,
+  user: string,
+  userPrivateKey: string,
+  name: string,
+  description?: string,
+): Promise<{ collectionId: string }> {
+  const [status, account] = await Promise.all([
+    api.getStatus(),
+    api.getAccount(user),
+  ]);
+  const chainId = (status as any).chainId || (status as any).chain_id || '';
+  const nonce = account.nonce;
+
+  const wallet = new ethers.Wallet(userPrivateKey);
+  const payload = {
+    chain_id: chainId,
+    user: normalizeAddress(user),
+    name,
+    description: description || '',
+    metadata: {},
+    nonce,
+  };
+  const hash = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(payload)));
+  const signature = wallet.signingKey.sign(ethers.getBytes(hash)).serialized;
+
+  const resp = await api.createCollection({
+    chainId,
+    user,
+    name,
+    description,
+    nonce,
+    publicKey: wallet.signingKey.publicKey,
+    signature,
+  });
+  return { collectionId: resp.collection.collection_id };
 }

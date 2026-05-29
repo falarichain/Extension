@@ -117,20 +117,19 @@ export const TOKEN_UNIT = 100_000_000;
 
 export const AGENT_KEY_PREFIX = 'fara_';
 
+export const MAX_AGENT_KEY_PERMISSIONS = 10;
+
 export const ALLOWED_PERMISSIONS = [
   'create_intent',
   'batch_commit',
   'finalize',
   'renew',
-  'retrieval',
+  'terminate',
   'collection_create',
   'append_record',
   'create_key_envelope',
-  'create_share',
-  'revoke_share',
   'share_create',
   'share_revoke',
-  'private_read',
 ];
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -138,16 +137,18 @@ export const PERMISSION_LABELS: Record<string, string> = {
   batch_commit: 'Batch Commit',
   finalize: 'Finalize',
   renew: 'Renew',
-  retrieval: 'Retrieval',
+  terminate: 'Terminate Deal',
   collection_create: 'Create Collection',
   append_record: 'Append Record',
   create_key_envelope: 'Create Key Envelope',
-  create_share: 'Create Share',
-  revoke_share: 'Revoke Share',
   share_create: 'Create Share',
   share_revoke: 'Revoke Share',
-  private_read: 'Read Private Content',
 };
+
+export const PERMISSION_PRESETS: { key: string; permissions: string[] }[] = [
+  { key: 'dataUpload', permissions: ['create_intent', 'batch_commit', 'finalize'] },
+  { key: 'dealManagement', permissions: ['renew', 'terminate'] },
+];
 
 export interface PasscodeKDFParams {
   name: string;
@@ -284,6 +285,58 @@ export interface UndelegateStakeResponse {
   validator: string;
   released: number;
   delegated_stake: number;
+}
+
+// ── Collections ──
+
+export interface DataCollection {
+  collection_id: string;
+  user: string;
+  name: string;
+  description?: string;
+  metadata?: Record<string, string>;
+  created_at_unix: number;
+  updated_at_unix: number;
+}
+
+export interface DataRecord {
+  record_id: string;
+  collection_id: string;
+  user: string;
+  intent_id: string;
+  deal_id?: string;
+  parent_record?: string;
+  kind?: string;
+  key?: string;
+  file_root: string;
+  manifest_root?: string;
+  metadata?: Record<string, string>;
+  created_at_unix: number;
+}
+
+export interface CollectionRecordFilter {
+  kind?: string;
+  key?: string;
+  parent_record?: string;
+  after_unix?: number;
+  before_unix?: number;
+  limit?: number;
+  reverse?: boolean;
+}
+
+export interface CollectionResponse {
+  collection: DataCollection;
+}
+
+export interface CollectionRecordsResponse {
+  collection: DataCollection;
+  filter?: CollectionRecordFilter;
+  records: DataRecord[];
+}
+
+export interface UserCollectionsResponse {
+  user: string;
+  collections: DataCollection[];
 }
 
 // ── Bridge ──
