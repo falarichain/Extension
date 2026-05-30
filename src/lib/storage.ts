@@ -35,8 +35,8 @@ export async function uploadFile(
   } = {},
 ): Promise<{ intentId: string; dealId: string }> {
   const {
-    dataShards = 3,
-    parityShards = 1,
+    dataShards = 4,
+    parityShards = 3,
     duration = 86400,
     onProgress,
   } = options;
