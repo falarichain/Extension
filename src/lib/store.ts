@@ -44,7 +44,7 @@ async function deriveVaultKey(password: string, salt: Uint8Array, iterations: nu
     { name: 'PBKDF2', salt: buf(salt), iterations, hash: 'SHA-256' },
     baseKey,
     { name: 'AES-GCM', length: 256 },
-    false,
+    true,
     ['encrypt', 'decrypt'],
   );
 }
@@ -337,7 +337,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   markUnlocked: async () => {
     try {
-      await chrome.storage.session.set({ [SESSION_KEY]: Date.now() });
+      const session: Record<string, unknown> = { [SESSION_KEY]: Date.now() };
+      if (_vaultKey) {
+        const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', _vaultKey));
+        session.falari_vault_key_hex = bytesToHex(rawKey);
+      }
+      await chrome.storage.session.set(session);
       set({ isLocked: false });
     } catch {}
   },
@@ -345,7 +350,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   clearSession: async () => {
     _vaultKey = null;
     try {
-      await chrome.storage.session.remove(SESSION_KEY);
+      await chrome.storage.session.remove([SESSION_KEY, 'falari_vault_key_hex']);
       set({ isLocked: true });
     } catch {}
   },

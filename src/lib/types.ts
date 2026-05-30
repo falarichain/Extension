@@ -77,6 +77,11 @@ export interface ChainStatus {
   peerCount: number;
   chainId?: string;
   chain_id?: string;
+  bonusGrantedCount?: number;
+  maxBonusAddresses?: number;
+  registrationBonusAmount?: number;
+  stakePerTiB?: number;
+  minCapacityBytes?: number;
 }
 
 export interface StorageIntentView {

@@ -25,8 +25,6 @@ function generateRequestId(): string {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// PBKDF2 vault decryption (mirrors store.ts logic for background use)
-const PBKDF2_ITERATIONS = 310_000;
 const ENCRYPTED_PREFIX = 'v1:';
 
 function hexToBytes(hex: string): Uint8Array {
@@ -37,30 +35,19 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-async function deriveVaultKey(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
-  const baseKey = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey'],
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: salt.buffer as ArrayBuffer, iterations, hash: 'SHA-256' },
-    baseKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
-  );
-}
-
 async function getVaultKey(): Promise<CryptoKey | null> {
   try {
     const result = await chrome.storage.session.get('falari_vault_key_hex');
     const keyHex = result['falari_vault_key_hex'];
     if (!keyHex) return null;
-    // Reconstruct CryptoKey from stored session data
-    const paramsResult = await chrome.storage.local.get('falari_vault_params');
-    const params = paramsResult['falari_vault_params'];
-    if (!params) return null;
-    const password = hexToBytes(keyHex);
-    return deriveVaultKey(
-      new TextDecoder().decode(password),
-      hexToBytes(params.salt),
-      params.iterations,
+    const rawKey = hexToBytes(keyHex);
+    if (rawKey.length !== 32) return null;
+    return crypto.subtle.importKey(
+      'raw',
+      rawKey.buffer.slice(rawKey.byteOffset, rawKey.byteOffset + rawKey.byteLength) as ArrayBuffer,
+      'AES-GCM',
+      false,
+      ['decrypt'],
     );
   } catch {
     return null;
@@ -121,23 +108,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.set({ falari_wallet_state: message.state }, () => {
       sendResponse({ success: true });
     });
-    return true;
-  }
-
-  if (message.type === 'GET_PRIVATE_KEY') {
-    chrome.storage.local.get(`pk_${message.address}`, (result) => {
-      sendResponse(result[`pk_${message.address}`] || null);
-    });
-    return true;
-  }
-
-  if (message.type === 'STORE_PRIVATE_KEY') {
-    chrome.storage.local.set(
-      { [`pk_${message.address}`]: message.privateKey },
-      () => {
-        sendResponse({ success: true });
-      },
-    );
     return true;
   }
 

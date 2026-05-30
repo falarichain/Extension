@@ -29,19 +29,25 @@
     "unlimitedStorage",
     "notifications",
     "alarms",
-    "sidePanel",
-    "session"
+    "sidePanel"
   ],
   "host_permissions": [
     "http://localhost:*/*",
-    "https://*/*"
+    "http://127.0.0.1:*/*",
+    "https://falari.io/*",
+    "https://*.falari.io/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
   "content_scripts": [
     {
-      "matches": ["http://localhost:*/*", "https://*/*"],
+      "matches": [
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*",
+        "https://falari.io/*",
+        "https://*.falari.io/*"
+      ],
       "js": ["src/content/bridge.ts"],
       "run_at": "document_start"
     }
@@ -49,7 +55,12 @@
   "web_accessible_resources": [
     {
       "resources": ["src/content/inject.ts"],
-      "matches": ["http://localhost:*/*", "https://*/*"]
+      "matches": [
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*",
+        "https://falari.io/*",
+        "https://*.falari.io/*"
+      ]
     }
   ]
 }
