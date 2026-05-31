@@ -25,6 +25,23 @@ function generateRequestId(): string {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// P2-C09: Origin validation for dApp messages.
+const EXTENSION_ORIGIN = chrome.runtime.getURL('').replace(/\/$/, '');
+
+async function isOriginAllowed(origin: string): Promise<boolean> {
+  if (!origin || origin === 'unknown') return false;
+  // Extension's own origin is always allowed.
+  if (origin === EXTENSION_ORIGIN) return true;
+  // Check user-configured allowed origins.
+  try {
+    const result = await chrome.storage.local.get('falari_allowed_origins');
+    const allowed: string[] = result.falari_allowed_origins || [];
+    return allowed.includes(origin);
+  } catch {
+    return false;
+  }
+}
+
 const ENCRYPTED_PREFIX = 'v1:';
 
 function hexToBytes(hex: string): Uint8Array {
@@ -127,6 +144,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // ── dApp: Get Accounts ──
   if (message.type === 'DAPP_GET_ACCOUNTS') {
     (async () => {
+      // P2-C09 + P3-C01: Only use sender.origin (Chrome-verified), never message.origin (attacker-controlled).
+      const origin = sender.origin || 'unknown';
+      if (!(await isOriginAllowed(origin))) {
+        sendResponse({ error: 'origin_not_allowed' });
+        return;
+      }
       const unlocked = await isSessionUnlocked();
       if (!unlocked) {
         sendResponse({ error: 'locked' });
@@ -150,6 +173,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // ── dApp: Sign Hash (opens approval popup) ──
   if (message.type === 'DAPP_SIGN_HASH') {
     (async () => {
+      // P2-C09 + P3-C01: Only use sender.origin (Chrome-verified), never message.origin (attacker-controlled).
+      const origin = sender.origin || 'unknown';
+      if (!(await isOriginAllowed(origin))) {
+        sendResponse({ error: 'origin_not_allowed' });
+        return;
+      }
       const unlocked = await isSessionUnlocked();
       if (!unlocked) {
         sendResponse({ error: 'locked' });
@@ -166,7 +195,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse,
         address,
         hash,
-        origin: message.origin || sender.origin || 'unknown',
+        origin: sender.origin || 'unknown',
       });
 
       // Store request details in session storage for the approval popup to read
@@ -174,7 +203,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         [`dapp_sign_${requestId}`]: {
           address,
           hash,
-          origin: message.origin || sender.origin || 'unknown',
+          origin: sender.origin || 'unknown',
           createdAt: Date.now(),
         },
       });

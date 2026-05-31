@@ -1,6 +1,7 @@
 import { ChainApi } from './api';
 import { bytesToBase64, base64ToBytes, decodeShards, encodeShards, merkleRoot } from './erasure';
 import { stripHexPrefix } from './crypto';
+import { computeCrossParityShards } from './cross-parity';
 
 const SEGMENT_ALGORITHM = 'AES-256-GCM/segment-v1';
 const OWNER_WRAP_ALGORITHM = 'AES-256-GCM/key-wrap-v1';
@@ -8,7 +9,7 @@ const PASSCODE_WRAP_ALGORITHM = 'AES-256-GCM/passcode-wrap-v1';
 const ADDRESS_WRAP_ALGORITHM = 'AES-256-GCM/address-link-wrap-v1';
 const PASSCODE_KDF = 'PBKDF2-SHA256/passcode-v1';
 const ADDRESS_KDF = 'PBKDF2-SHA256/address-link-v1';
-const DEFAULT_SEGMENT_SIZE = 1024 * 1024;
+const DEFAULT_SEGMENT_SIZE = 4 * 1024 * 1024;
 const DEFAULT_PBKDF2_ITERATIONS = 310000;
 
 export interface PrivateUploadResult {
@@ -70,6 +71,7 @@ export async function uploadPrivateFile(
   }[] = [];
   const segmentRoots: string[] = [];
   const allShards: { segmentId: number; shardIndex: number; data: Uint8Array; hash: string }[] = [];
+  const segmentShards: Uint8Array[][] = [];
   let storedSize = 0;
 
   for (let segId = 0, offset = 0; offset < plaintext.length || (plaintext.length === 0 && segId === 0); segId++, offset += DEFAULT_SEGMENT_SIZE) {
@@ -77,6 +79,7 @@ export async function uploadPrivateFile(
     const ciphertext = await encryptSegment(plainSegment, dataKey, nonceBase, keyHash, segId);
     storedSize += ciphertext.length;
     const shards = encodeShards(ciphertext, dataShards, parityShards);
+    segmentShards.push(shards);
     const shardHashes: string[] = [];
     const shardCIDs: string[] = [];
     for (let i = 0; i < shards.length; i++) {
@@ -88,6 +91,38 @@ export async function uploadPrivateFile(
     segments.push({ segmentId: segId, segmentRoot, shardHashes, shardCIDs });
     segmentRoots.push(segmentRoot);
     if (plaintext.length === 0) break;
+  }
+
+  // Compute cross-parity repair pools for consecutive encrypted segment pairs.
+  const repairPools: {
+    pool_id: number;
+    segment_ids: [number, number];
+    cross_parity: { shard_hashes: string[]; shard_cids: string[]; shard_size: number };
+  }[] = [];
+
+  const totalSegments = segments.length;
+  for (let poolIdx = 0; poolIdx + 1 < totalSegments; poolIdx += 2) {
+    const crossShards = computeCrossParityShards(segmentShards[poolIdx], segmentShards[poolIdx + 1]);
+    const crossHashes: string[] = [];
+    let crossShardSize = 0;
+    const paritySegId = -(poolIdx / 2 + 1);
+
+    for (let i = 0; i < crossShards.length; i++) {
+      const hash = await sha256Hex(crossShards[i]);
+      crossHashes.push(hash);
+      crossShardSize = crossShards[i].length;
+      allShards.push({ segmentId: paritySegId, shardIndex: i, data: crossShards[i], hash });
+    }
+
+    repairPools.push({
+      pool_id: poolIdx / 2,
+      segment_ids: [poolIdx, poolIdx + 1],
+      cross_parity: {
+        shard_hashes: crossHashes,
+        shard_cids: [],
+        shard_size: crossShardSize,
+      },
+    });
   }
 
   const fileRoot = merkleRoot(segmentRoots);
@@ -103,6 +138,7 @@ export async function uploadPrivateFile(
     fileRoot,
     segmentRoots,
     segments,
+    repair_pools: repairPools.length > 0 ? repairPools : undefined,
     erasure: { dataShards, parityShards, shardSize },
     policy: {
       class: 'standard',
@@ -133,13 +169,14 @@ export async function uploadPrivateFile(
       return (a.segment_id ?? a.segmentId) === shard.segmentId && (a.shard_index ?? a.shardIndex) === shard.shardIndex;
     });
     if (!assignment) continue;
-    const segment = segments[shard.segmentId];
+    const segment = shard.segmentId >= 0 ? segments[shard.segmentId] : undefined;
+    const segRoot = segment?.segmentRoot ?? '';
     const receipt = await api.uploadShard({
       intentId,
       user,
       fileRoot,
       segmentId: shard.segmentId,
-      segmentRoot: segment.segmentRoot,
+      segmentRoot: segRoot,
       shardIndex: shard.shardIndex,
       shardId: `${intentId}:${shard.segmentId}:${shard.shardIndex}`,
       shardHash: shard.hash,

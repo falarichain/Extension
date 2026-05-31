@@ -6,6 +6,7 @@ import {
   bytesToBase64,
 } from './erasure';
 import { sha256, stripHexPrefix } from './crypto';
+import { computeCrossParityShards } from './cross-parity';
 
 function sha256Hex(data: Uint8Array): string {
   return stripHexPrefix(sha256(data));
@@ -36,7 +37,7 @@ export async function uploadFile(
 ): Promise<{ intentId: string; dealId: string }> {
   const {
     dataShards = 4,
-    parityShards = 3,
+    parityShards = 2,
     duration = 86400,
     onProgress,
   } = options;
@@ -57,7 +58,7 @@ export async function uploadFile(
 
   const fileData = new Uint8Array(await file.arrayBuffer());
   const fileSize = fileData.length;
-  const segmentSize = 1024 * 1024;
+  const segmentSize = 4 * 1024 * 1024;
 
   report({ stage: 'erasure' });
 
@@ -71,6 +72,8 @@ export async function uploadFile(
   }[] = [];
 
   const allShards: { segmentId: number; shardIndex: number; data: Uint8Array; hash: string }[] = [];
+  // Track per-segment shards for cross-parity computation.
+  const segmentShards: Uint8Array[][] = [];
 
   const totalSegments = segmentRoots.length;
 
@@ -80,6 +83,7 @@ export async function uploadFile(
       Math.min((segId + 1) * segmentSize, fileSize),
     );
     const shards = encodeShards(segData, dataShards, parityShards);
+    segmentShards.push(shards);
     const shardHashes: string[] = [];
     const shardCIDs: string[] = [];
 
@@ -94,6 +98,37 @@ export async function uploadFile(
       segmentRoot: merkleRoot(shardHashes),
       shardHashes,
       shardCIDs,
+    });
+  }
+
+  // Compute cross-parity repair pools for consecutive segment pairs.
+  const repairPools: {
+    pool_id: number;
+    segment_ids: [number, number];
+    cross_parity: { shard_hashes: string[]; shard_cids: string[]; shard_size: number };
+  }[] = [];
+
+  for (let poolIdx = 0; poolIdx + 1 < totalSegments; poolIdx += 2) {
+    const crossShards = computeCrossParityShards(segmentShards[poolIdx], segmentShards[poolIdx + 1]);
+    const crossHashes: string[] = [];
+    let crossShardSize = 0;
+    const paritySegId = -(poolIdx / 2 + 1);
+
+    for (let i = 0; i < crossShards.length; i++) {
+      const hash = sha256Hex(crossShards[i]);
+      crossHashes.push(hash);
+      crossShardSize = crossShards[i].length;
+      allShards.push({ segmentId: paritySegId, shardIndex: i, data: crossShards[i], hash });
+    }
+
+    repairPools.push({
+      pool_id: poolIdx / 2,
+      segment_ids: [poolIdx, poolIdx + 1],
+      cross_parity: {
+        shard_hashes: crossHashes,
+        shard_cids: [],
+        shard_size: crossShardSize,
+      },
     });
   }
 
@@ -118,6 +153,7 @@ export async function uploadFile(
       shardHashes: s.shardHashes,
       shardCIDs: s.shardCIDs,
     })),
+    repair_pools: repairPools.length > 0 ? repairPools : undefined,
     erasure: { dataShards, parityShards, shardSize },
     policy: {
       class: 'standard',
@@ -146,14 +182,15 @@ export async function uploadFile(
     );
 
     if (assignment) {
-      const segment = segments[shard.segmentId];
+      const segment = shard.segmentId >= 0 ? segments[shard.segmentId] : undefined;
+      const segRoot = segment?.segmentRoot ?? '';
       await api.uploadShard(
         {
           intentId,
           user,
           fileRoot,
           segmentId: shard.segmentId,
-          segmentRoot: segment.segmentRoot,
+          segmentRoot: segRoot,
           shardIndex: shard.shardIndex,
           shardId: `${intentId}_${shard.segmentId}_${shard.shardIndex}`,
           shardHash: shard.hash,
@@ -176,7 +213,7 @@ export async function uploadFile(
         intentId,
         fileRoot,
         segmentId: shard.segmentId,
-        segmentRoot: segment.segmentRoot,
+        segmentRoot: segRoot,
         shardIndex: shard.shardIndex,
         shardId: `${intentId}_${shard.segmentId}_${shard.shardIndex}`,
         shardHash: shard.hash,
@@ -235,7 +272,7 @@ export async function downloadFile(
   const fileSize = plan.fileSize;
   const dataShards = plan.erasure.dataShards;
   const parityShards = plan.erasure.parityShards;
-  const segmentSize = 1024 * 1024;
+  const segmentSize = 4 * 1024 * 1024;
 
   const result = new Uint8Array(fileSize);
   const assignments = plan.assignments || [];

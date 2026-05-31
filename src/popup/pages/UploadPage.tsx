@@ -31,8 +31,8 @@ const DURATION_OPTIONS = [
   { key: 'forever' as const, value: 0 },
 ];
 
-const DATA_SHARDS = 3;
-const PARITY_SHARDS = 1;
+const DATA_SHARDS = 4;
+const PARITY_SHARDS = 2;
 
 function computeProgress(p: UploadProgress): number {
   switch (p.stage) {

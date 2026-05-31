@@ -129,6 +129,11 @@ export class ChainApi {
       shardHashes: string[];
       shardCIDs: string[];
     }[];
+    repair_pools?: {
+      pool_id: number;
+      segment_ids: [number, number];
+      cross_parity: { shard_hashes: string[]; shard_cids: string[]; shard_size: number };
+    }[];
     erasure: { dataShards: number; parityShards: number; shardSize: number };
     policy: {
       class: string;
