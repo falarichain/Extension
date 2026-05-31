@@ -301,6 +301,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       },
     });
     _vaultKey = key;
+    // P0-2 fix: Export raw vault key to session storage so the background
+    // service worker (separate JS context) can re-import it for dApp signing.
+    const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
+    await chrome.storage.session.set({ falari_vault_key_hex: bytesToHex(rawKey) });
     set({ isLocked: false });
   },
 
@@ -313,6 +317,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const decrypted = await vaultDecrypt(key, params.verifier);
       if (decrypted === 'falari-vault-v1') {
         _vaultKey = key;
+        // P0-2 fix: Export raw vault key to session storage for background SW.
+        const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
+        await chrome.storage.session.set({ falari_vault_key_hex: bytesToHex(rawKey) });
         const currentKeys = get().agentKeys;
         const unlocked = currentKeys.length > 0
           ? await decryptAgentKeys(currentKeys, key)
@@ -337,8 +344,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   markUnlocked: async () => {
     try {
-      // Only store a session-unlock timestamp — NEVER export the vault key.
-      // The CryptoKey stays in module-level memory (_vaultKey) only.
+      // Store session-unlock timestamp for checkSessionUnlocked().
+      // Vault key hex is already exported to session storage by
+      // setPassword / verifyPassword (P0-2 fix).
       await chrome.storage.session.set({ [SESSION_KEY]: Date.now() });
       set({ isLocked: false });
     } catch {}
@@ -347,7 +355,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   clearSession: async () => {
     _vaultKey = null;
     try {
-      await chrome.storage.session.remove([SESSION_KEY]);
+      await chrome.storage.session.remove([SESSION_KEY, 'falari_vault_key_hex']);
       set({ isLocked: true });
     } catch {}
   },
