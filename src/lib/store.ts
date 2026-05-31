@@ -337,12 +337,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   markUnlocked: async () => {
     try {
-      const session: Record<string, unknown> = { [SESSION_KEY]: Date.now() };
-      if (_vaultKey) {
-        const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', _vaultKey));
-        session.falari_vault_key_hex = bytesToHex(rawKey);
-      }
-      await chrome.storage.session.set(session);
+      // Only store a session-unlock timestamp — NEVER export the vault key.
+      // The CryptoKey stays in module-level memory (_vaultKey) only.
+      await chrome.storage.session.set({ [SESSION_KEY]: Date.now() });
       set({ isLocked: false });
     } catch {}
   },
@@ -350,7 +347,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   clearSession: async () => {
     _vaultKey = null;
     try {
-      await chrome.storage.session.remove([SESSION_KEY, 'falari_vault_key_hex']);
+      await chrome.storage.session.remove([SESSION_KEY]);
       set({ isLocked: true });
     } catch {}
   },

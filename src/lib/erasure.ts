@@ -37,12 +37,102 @@ export function merkleRoot(hashes: string[]): string {
   return layer[0];
 }
 
+// ─── GF(2^8) arithmetic ────────────────────────────────────────────
+// Primitive polynomial: x^8 + x^4 + x^3 + x^2 + 1  (0x11d)
+// Compatible with klauspost/reedsolomon (Go chain-side).
+
+const GF_SIZE = 256;
+const GF_POLY = 0x11d;
+
+const gfExp = new Uint8Array(512);
+const gfLog = new Uint8Array(256);
+
+(function initGF() {
+  let x = 1;
+  for (let i = 0; i < 255; i++) {
+    gfExp[i] = x;
+    gfLog[x] = i;
+    x <<= 1;
+    if (x >= GF_SIZE) x ^= GF_POLY;
+  }
+  for (let i = 255; i < 512; i++) gfExp[i] = gfExp[i - 255];
+})();
+
+function gfMul(a: number, b: number): number {
+  if (a === 0 || b === 0) return 0;
+  return gfExp[gfLog[a] + gfLog[b]];
+}
+
+function gfInv(a: number): number {
+  if (a === 0) throw new Error('GF(2^8): inverse of zero');
+  return gfExp[255 - gfLog[a]];
+}
+
+// ─── Cauchy matrix encoder ─────────────────────────────────────────
+
+function buildEncodingMatrix(dataShards: number, parityShards: number): Uint8Array[] {
+  const total = dataShards + parityShards;
+  const mat: Uint8Array[] = [];
+  for (let i = 0; i < total; i++) {
+    mat.push(new Uint8Array(dataShards));
+  }
+  // Top rows: identity (data shards pass through)
+  for (let i = 0; i < dataShards; i++) mat[i][i] = 1;
+  // Bottom rows: Cauchy matrix
+  //   X = {0, …, parityShards-1},  Y = {parityShards, …, total-1}
+  //   M[p][j] = 1 / (X[p] ⊕ Y[j])   in GF(2^8)
+  for (let p = 0; p < parityShards; p++) {
+    for (let j = 0; j < dataShards; j++) {
+      mat[dataShards + p][j] = gfInv(p ^ (parityShards + j));
+    }
+  }
+  return mat;
+}
+
+function invertMatrix(src: Uint8Array[][], size: number): Uint8Array[][] | null {
+  const work: Uint8Array[][] = [];
+  const inv: Uint8Array[][] = [];
+  for (let i = 0; i < size; i++) {
+    work.push(new Uint8Array(src[i]));
+    const id = new Uint8Array(size);
+    id[i] = 1;
+    inv.push(id);
+  }
+  for (let col = 0; col < size; col++) {
+    let pivot = -1;
+    for (let row = col; row < size; row++) {
+      if (work[row][col] !== 0) { pivot = row; break; }
+    }
+    if (pivot === -1) return null;
+    if (pivot !== col) {
+      [work[col], work[pivot]] = [work[pivot], work[col]];
+      [inv[col], inv[pivot]] = [inv[pivot], inv[col]];
+    }
+    const scale = gfInv(work[col][col]);
+    for (let j = 0; j < size; j++) {
+      work[col][j] = gfMul(work[col][j], scale);
+      inv[col][j] = gfMul(inv[col][j], scale);
+    }
+    for (let row = 0; row < size; row++) {
+      if (row === col) continue;
+      const factor = work[row][col];
+      if (factor === 0) continue;
+      for (let j = 0; j < size; j++) {
+        work[row][j] ^= gfMul(factor, work[col][j]);
+        inv[row][j] ^= gfMul(factor, inv[col][j]);
+      }
+    }
+  }
+  return inv;
+}
+
+// ─── Public API ─────────────────────────────────────────────────────
+
 export function encodeShards(
   data: Uint8Array,
   dataShards: number,
   parityShards: number,
 ): Uint8Array[] {
-  const total = dataShards + parityShards;
   const shardSize = Math.ceil(data.length / dataShards);
   const paddedSize = shardSize * dataShards;
   const padded = new Uint8Array(paddedSize);
@@ -53,14 +143,16 @@ export function encodeShards(
     shards.push(padded.slice(i * shardSize, (i + 1) * shardSize));
   }
 
+  const encMatrix = buildEncodingMatrix(dataShards, parityShards);
   for (let p = 0; p < parityShards; p++) {
+    const row = encMatrix[dataShards + p];
     const parity = new Uint8Array(shardSize);
-    for (let i = 0; i < shardSize; i++) {
-      let sum = 0;
+    for (let j = 0; j < shardSize; j++) {
+      let val = 0;
       for (let d = 0; d < dataShards; d++) {
-        sum ^= shards[d][i];
+        val ^= gfMul(row[d], shards[d][j]);
       }
-      parity[i] = sum;
+      parity[j] = val;
     }
     shards.push(parity);
   }
@@ -75,32 +167,61 @@ export function decodeShards(
   originalSize: number,
 ): Uint8Array | null {
   const total = dataShards + parityShards;
-  if (shards.length < dataShards) return null;
+  if (shards.length !== total) return null;
 
   const available = shards.filter((s): s is Uint8Array => s !== null);
   if (available.length < dataShards) return null;
 
-  const shardSize = available[0].length;
+  // Fast path: all data shards present
+  const allDataPresent = shards.slice(0, dataShards).every((s) => s !== null);
+  if (allDataPresent) {
+    const result = new Uint8Array(originalSize);
+    for (let i = 0; i < dataShards; i++) {
+      const offset = i * shards[i]!.length;
+      const copyLen = Math.min(shards[i]!.length, originalSize - offset);
+      if (copyLen > 0) result.set(shards[i]!.slice(0, copyLen), offset);
+    }
+    return result;
+  }
 
-  const filled: Uint8Array[] = [];
-  for (let i = 0; i < dataShards; i++) {
-    if (shards[i]) {
-      filled.push(shards[i]!);
+  const shardSize = available[0].length;
+  const encMatrix = buildEncodingMatrix(dataShards, parityShards);
+
+  // Pick the first dataShards available shards to form a solvable sub-system
+  const indices: number[] = [];
+  const subRows: Uint8Array[][] = [];
+  const subData: Uint8Array[] = [];
+
+  for (let i = 0; i < total && indices.length < dataShards; i++) {
+    if (shards[i] !== null) {
+      indices.push(i);
+      subRows.push(Array.from(encMatrix[i]) as unknown as Uint8Array);
+      subData.push(shards[i]!);
+    }
+  }
+  if (indices.length < dataShards) return null;
+
+  // Convert subRows to proper Uint8Array[]
+  const matrix: Uint8Array[][] = subRows.map((r) => new Uint8Array(r));
+  const invMatrix = invertMatrix(matrix, dataShards);
+  if (!invMatrix) return null;
+
+  // Reconstruct missing data shards
+  const recovered: (Uint8Array | null)[] = new Array(dataShards).fill(null);
+  for (let d = 0; d < dataShards; d++) {
+    if (shards[d] !== null) {
+      recovered[d] = shards[d];
     } else {
-      const recovered = new Uint8Array(shardSize);
+      const shard = new Uint8Array(shardSize);
+      const invRow = invMatrix[d];
       for (let j = 0; j < shardSize; j++) {
         let val = 0;
-        let count = 0;
-        for (const s of shards) {
-          if (s && s.length > j) {
-            val ^= s[j];
-            count++;
-          }
+        for (let k = 0; k < dataShards; k++) {
+          val ^= gfMul(invRow[k], subData[k][j]);
         }
-        if (count < dataShards) return null;
-        recovered[j] = val;
+        shard[j] = val;
       }
-      filled.push(recovered);
+      recovered[d] = shard;
     }
   }
 
@@ -108,11 +229,10 @@ export function decodeShards(
   for (let i = 0; i < dataShards; i++) {
     const offset = i * shardSize;
     const copyLen = Math.min(shardSize, originalSize - offset);
-    if (copyLen > 0) {
-      result.set(filled[i].slice(0, copyLen), offset);
+    if (copyLen > 0 && recovered[i]) {
+      result.set(recovered[i]!.slice(0, copyLen), offset);
     }
   }
-
   return result;
 }
 
