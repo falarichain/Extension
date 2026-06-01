@@ -13,11 +13,12 @@ import { MultisigPage } from './pages/MultisigPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StakingPage } from './pages/StakingPage';
 import { BridgePage } from './pages/BridgePage';
+import { DataPage } from './pages/DataPage';
 import WelcomePage from './pages/WelcomePage';
 import ApprovalPage from './pages/ApprovalPage';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
 
-type Page = 'dashboard' | 'staking' | 'bridge' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
+type Page = 'dashboard' | 'staking' | 'bridge' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'data' | 'settings' | 'welcome';
 
 export default function App() {
   const loadState = useAppStore((s) => s.loadState);
@@ -143,6 +144,8 @@ export default function App() {
         return <DownloadPage api={api} />;
       case 'share':
         return <SharePage api={api} />;
+      case 'data':
+        return <DataPage api={api} />;
       case 'settings':
         return <SettingsPage theme={theme} onThemeChange={handleThemeChange} />;
       default:

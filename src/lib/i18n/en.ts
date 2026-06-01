@@ -6,6 +6,7 @@ const en = {
     upload: 'Upload',
     download: 'Download',
     settings: 'Settings',
+    data: 'Data',
     sidePanel: 'Open Side Panel',
   },
   lockscreen: {
@@ -426,6 +427,11 @@ const en = {
     pkNotFound: 'Private key not found',
     noAccount: 'No account selected',
     invalidAmount: 'Invalid amount',
+  },
+  data: {
+    title: 'Data Management',
+    subtitle: 'Your storage intents',
+    empty: 'No storage intents found',
   },
 } as const;
 

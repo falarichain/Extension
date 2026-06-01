@@ -5,6 +5,8 @@ import {
   generateLocalAgentKey,
   registerAgentKey,
   revokeAgentKey,
+  extendAgentKey,
+  topupAgentKey,
   updateAgentKeyEncodedString,
 } from '@/lib/agent-key';
 import type { LocalAgentKey } from '@/lib/types';
@@ -68,6 +70,16 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [revokeError, setRevokeError] = useState('');
+
+  // Extend / Topup state
+  const [extendingKeyId, setExtendingKeyId] = useState<string | null>(null);
+  const [extendDays, setExtendDays] = useState('30');
+  const [extendLoading, setExtendLoading] = useState(false);
+  const [extendError, setExtendError] = useState('');
+  const [topupKeyId, setTopupKeyId] = useState<string | null>(null);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupLoading, setTopupLoading] = useState(false);
+  const [topupError, setTopupError] = useState('');
 
   const [name, setName] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([...ALLOWED_PERMISSIONS]);
@@ -304,6 +316,75 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
       }
     },
     [getPrivateKey, api, updateAgentKey, saveState, t],
+  );
+
+  const handleExtendKey = useCallback(
+    async (key: LocalAgentKey) => {
+      if (!key.keyId || !key.registered) return;
+      setExtendError('');
+      setExtendLoading(true);
+      try {
+        const masterPrivateKey = await getPrivateKey(key.master);
+        if (!masterPrivateKey) {
+          setExtendError('主钱包私钥不可用');
+          return;
+        }
+        const days = parseInt(extendDays, 10);
+        if (!days || days <= 0) {
+          setExtendError('请输入有效的天数');
+          return;
+        }
+        const newExpiresAt = Math.floor(Date.now() / 1000) + days * 86400;
+        const result = await extendAgentKey(api, key.keyId, key.master, newExpiresAt, masterPrivateKey);
+        if (result.success) {
+          updateAgentKey(key.keyId, { expiresAt: newExpiresAt });
+          await saveState();
+          setExtendingKeyId(null);
+        } else {
+          setExtendError(result.error || '续期失败');
+        }
+      } catch (err: any) {
+        setExtendError(err.message || '续期失败');
+      } finally {
+        setExtendLoading(false);
+      }
+    },
+    [getPrivateKey, api, updateAgentKey, saveState, extendDays],
+  );
+
+  const handleTopupKey = useCallback(
+    async (key: LocalAgentKey) => {
+      if (!key.keyId || !key.registered) return;
+      setTopupError('');
+      setTopupLoading(true);
+      try {
+        const masterPrivateKey = await getPrivateKey(key.master);
+        if (!masterPrivateKey) {
+          setTopupError('主钱包私钥不可用');
+          return;
+        }
+        const amount = parseInt(topupAmount, 10);
+        if (!amount || amount <= 0) {
+          setTopupError('请输入有效的额度');
+          return;
+        }
+        const newTotalLimit = key.totalLimit + amount;
+        const result = await topupAgentKey(api, key.keyId, key.master, newTotalLimit, masterPrivateKey);
+        if (result.success) {
+          updateAgentKey(key.keyId, { totalLimit: newTotalLimit });
+          await saveState();
+          setTopupKeyId(null);
+          setTopupAmount('');
+        } else {
+          setTopupError(result.error || '充值失败');
+        }
+      } catch (err: any) {
+        setTopupError(err.message || '充值失败');
+      } finally {
+        setTopupLoading(false);
+      }
+    },
+    [getPrivateKey, api, updateAgentKey, saveState, topupAmount],
   );
 
   const handleDeleteKey = useCallback(
@@ -684,6 +765,89 @@ export function AgentKeysPage({ api }: AgentKeysPageProps) {
                             <p className="text-[11px] text-blue-200 leading-relaxed">
                               这个 Agent Key 是从链上恢复的记录，本机没有私钥。你可以用主钱包撤销它，但不能继续使用它执行 Agent 操作。
                             </p>
+                          </div>
+                        )}
+
+                        {/* Extend / Topup actions for registered, non-revoked keys */}
+                        {key.registered && !key.revoked && (
+                          <div className="flex flex-col gap-2 mt-1">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExtendingKeyId(extendingKeyId === key.keyId ? null : key.keyId!);
+                                  setTopupKeyId(null);
+                                  setExtendError('');
+                                }}
+                                className="flex-1 btn-secondary flex items-center justify-center gap-1.5 py-1.5 text-[11px]"
+                              >
+                                <Clock className="w-3 h-3" />
+                                续期
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTopupKeyId(topupKeyId === key.keyId ? null : key.keyId!);
+                                  setExtendingKeyId(null);
+                                  setTopupError('');
+                                }}
+                                className="flex-1 btn-secondary flex items-center justify-center gap-1.5 py-1.5 text-[11px]"
+                              >
+                                <Plus className="w-3 h-3" />
+                                充值额度
+                              </button>
+                            </div>
+
+                            {extendingKeyId === key.keyId && (
+                              <div className="flex flex-col gap-2 rounded-lg border border-purple-500/20 bg-purple-500/5 p-2.5">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    className="input-field text-[12px] flex-1"
+                                    placeholder="续期天数"
+                                    value={extendDays}
+                                    onChange={(e) => { setExtendDays(e.target.value); setExtendError(''); }}
+                                    min="1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleExtendKey(key); }}
+                                    disabled={extendLoading}
+                                    className="btn-primary py-1.5 px-3 text-[11px] shrink-0"
+                                  >
+                                    {extendLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : '确认'}
+                                  </button>
+                                </div>
+                                {extendError && <p className="text-[10px] text-red-400">{extendError}</p>}
+                              </div>
+                            )}
+
+                            {topupKeyId === key.keyId && (
+                              <div className="flex flex-col gap-2 rounded-lg border border-purple-500/20 bg-purple-500/5 p-2.5">
+                                <p className="text-[10px] text-slate-500">
+                                  当前总额度: <span className="text-white font-semibold">{key.totalLimit.toLocaleString()}</span>
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    className="input-field text-[12px] flex-1"
+                                    placeholder="增加额度"
+                                    value={topupAmount}
+                                    onChange={(e) => { setTopupAmount(e.target.value); setTopupError(''); }}
+                                    min="1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleTopupKey(key); }}
+                                    disabled={topupLoading}
+                                    className="btn-primary py-1.5 px-3 text-[11px] shrink-0"
+                                  >
+                                    {topupLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : '确认'}
+                                  </button>
+                                </div>
+                                {topupError && <p className="text-[10px] text-red-400">{topupError}</p>}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

@@ -9,6 +9,7 @@ import {
   Share2,
   Users,
   ArrowLeftRight,
+  HardDrive,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { ChainApi } from '@/lib/api';
@@ -16,7 +17,7 @@ import { useAppStore } from '@/lib/store';
 import WalletSelectorFull from './WalletSelectorFull';
 import { extensionAssetUrl } from '@/lib/extensionAssets';
 
-type Page = 'dashboard' | 'staking' | 'bridge' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'settings' | 'welcome';
+type Page = 'dashboard' | 'staking' | 'bridge' | 'agent-keys' | 'multisig' | 'upload' | 'download' | 'share' | 'data' | 'settings' | 'welcome';
 
 interface Props {
   currentPage: Page;
@@ -36,6 +37,7 @@ const navItems: { id: Page; icon: typeof LayoutDashboard }[] = [
   { id: 'upload', icon: ArrowUpCircle },
   { id: 'download', icon: ArrowDownCircle },
   { id: 'share', icon: Share2 },
+  { id: 'data', icon: HardDrive },
   { id: 'settings', icon: Settings },
 ];
 
@@ -80,6 +82,7 @@ export default function Layout({ currentPage, onNavigate, chainNode, chainStatus
     upload: t.nav.upload,
     download: t.nav.download,
     share: '分享',
+    data: t.nav.data || 'Data',
     settings: t.nav.settings,
   };
 

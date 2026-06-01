@@ -8,6 +8,7 @@ const zh: Locale = {
     upload: '上传',
     download: '下载',
     settings: '设置',
+    data: '数据',
     sidePanel: '打开侧边栏',
   },
   lockscreen: {
@@ -425,6 +426,11 @@ const zh: Locale = {
     pkNotFound: '未找到私钥',
     noAccount: '未选择账户',
     invalidAmount: '金额无效',
+  },
+  data: {
+    title: '数据管理',
+    subtitle: '你的存储意图',
+    empty: '暂无存储意图',
   },
 } as const;
 

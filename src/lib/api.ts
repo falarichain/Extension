@@ -2,12 +2,14 @@ import type { ChainStatus, KeyEnvelope, ShareRecord, StorageIntentView, StorageU
 
 const DEFAULT_TIMEOUT = 60000;
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code: string;
+  constructor(message: string, status: number, code = '') {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -31,7 +33,14 @@ async function request<T>(
     });
     const body = await resp.text();
     if (resp.status < 200 || resp.status >= 300) {
-      throw new ApiError(body || `HTTP ${resp.status}`, resp.status);
+      let message = body || `HTTP ${resp.status}`;
+      let code = '';
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed?.message) message = parsed.message;
+        if (parsed?.code) code = parsed.code;
+      } catch {}
+      throw new ApiError(message, resp.status, code);
     }
     if (!body) return undefined as T;
     return JSON.parse(body) as T;
@@ -537,6 +546,10 @@ export class ChainApi {
     const qs = params.toString();
     const path = `/collections/${encodeURIComponent(collectionId)}/records${qs ? `?${qs}` : ''}`;
     return request<CollectionRecordsResponse>(this.baseUrl, path);
+  }
+
+  async listUserIntents(user: string): Promise<{ intents: StorageIntentView[] }> {
+    return request(this.baseUrl, `/user-intents?user=${encodeURIComponent(user)}`);
   }
 
   async listUserCollections(user: string): Promise<UserCollectionsResponse> {
