@@ -188,12 +188,28 @@ export function WalletPage({ api }: WalletPageProps) {
     let amount: number;
 
     try {
-      amount = parseFloat(sendAmount);
-      if (isNaN(amount) || amount <= 0) {
+      // Use BigInt-based parsing to avoid floating-point precision loss.
+      const trimmed = sendAmount.trim();
+      if (!trimmed || isNaN(Number(trimmed)) || Number(trimmed) <= 0) {
         setSendError(t.wallet.invalidAmount);
         return;
       }
-      amount = Math.round(amount * TOKEN_UNIT);
+      const dotIdx = trimmed.indexOf('.');
+      let unitAmount: bigint;
+      if (dotIdx === -1) {
+        unitAmount = BigInt(trimmed) * BigInt(TOKEN_UNIT);
+      } else {
+        const intPart = trimmed.slice(0, dotIdx) || '0';
+        const fracPart = trimmed.slice(dotIdx + 1);
+        const decimals = 8; // TOKEN_UNIT = 1e8
+        const padded = fracPart.padEnd(decimals, '0').slice(0, decimals);
+        unitAmount = BigInt(intPart) * BigInt(TOKEN_UNIT) + BigInt(padded);
+      }
+      if (unitAmount <= 0n) {
+        setSendError(t.wallet.invalidAmount);
+        return;
+      }
+      amount = Number(unitAmount);
     } catch {
       setSendError(t.wallet.invalidAmount);
       return;

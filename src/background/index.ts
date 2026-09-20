@@ -114,7 +114,17 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Security: only allow trusted extension contexts (popup/sidepanel) to access
+  // state management and notification APIs. Content scripts from external sites
+  // must NOT be able to read/write wallet state or trigger notifications.
+  const isTrustedSender = sender.id === chrome.runtime.id &&
+    (!sender.origin || sender.origin === chrome.runtime.getURL('').replace(/\/$/, ''));
+
   if (message.type === 'GET_STATE') {
+    if (!isTrustedSender) {
+      sendResponse({ error: 'unauthorized' });
+      return true;
+    }
     chrome.storage.local.get('falari_wallet_state', (result) => {
       sendResponse(result.falari_wallet_state || null);
     });
@@ -122,6 +132,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'SET_STATE') {
+    if (!isTrustedSender) {
+      sendResponse({ error: 'unauthorized' });
+      return true;
+    }
     chrome.storage.local.set({ falari_wallet_state: message.state }, () => {
       sendResponse({ success: true });
     });
@@ -129,6 +143,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'NOTIFY') {
+    if (!isTrustedSender) {
+      sendResponse({ error: 'unauthorized' });
+      return true;
+    }
     if (message.notification) {
       chrome.notifications.create({
         type: 'basic',
@@ -227,6 +245,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // ── dApp: Approval Result (from popup) ──
   if (message.type === 'DAPP_APPROVAL_RESULT') {
+    // Security: only the extension's own popup can send approval results.
+    if (sender.id !== chrome.runtime.id || sender.origin !== EXTENSION_ORIGIN) {
+      sendResponse({ error: 'unauthorized' });
+      return true;
+    }
     (async () => {
       const { requestId, approved } = message;
       const pending = pendingSignRequests.get(requestId);

@@ -21,6 +21,7 @@ const en = {
     unlock: 'Unlock',
     passwordRequired: 'Please enter a password',
     passwordTooShort: 'Password must be at least 8 characters',
+    passwordTooWeak: 'Password must include at least 2 of: uppercase, lowercase, digit, special character',
     passwordMismatch: 'Passwords do not match',
     wrongPassword: 'Incorrect password',
     error: 'An error occurred. Please try again.',

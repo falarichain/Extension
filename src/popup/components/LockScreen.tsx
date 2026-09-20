@@ -38,6 +38,16 @@ export default function LockScreen() {
           setError(t.lockscreen.passwordTooShort);
           return;
         }
+        // Password complexity: require at least 2 of: uppercase, lowercase, digit, special char.
+        const hasUpper = /[A-Z]/.test(password);
+        const hasLower = /[a-z]/.test(password);
+        const hasDigit = /[0-9]/.test(password);
+        const hasSpecial = /[^A-Za-z0-9]/.test(password);
+        const complexity = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+        if (complexity < 2) {
+          setError(t.lockscreen.passwordTooWeak);
+          return;
+        }
         if (password !== confirmPassword) {
           setError(t.lockscreen.passwordMismatch);
           return;

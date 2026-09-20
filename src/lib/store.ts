@@ -85,6 +85,12 @@ async function decryptAgentKeys(keys: LocalAgentKey[], key: CryptoKey): Promise<
 // Module-level vault key, held in memory only while unlocked.
 let _vaultKey: CryptoKey | null = null;
 
+// Brute-force protection: track failed password attempts and enforce delays.
+let _failedAttempts = 0;
+let _lockoutUntil = 0; // epoch ms
+const MAX_ATTEMPTS_BEFORE_LOCKOUT = 5;
+const LOCKOUT_BASE_MS = 30_000; // 30 seconds base lockout, doubles each time
+
 interface AppStore {
   accounts: WalletAccount[];
   selectedAccount: string | null;
@@ -261,6 +267,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   saveState: async () => {
     try {
+      // Security: never persist agent keys in plaintext when vault is locked.
+      if (!_vaultKey) {
+        const agentKeys = get().agentKeys;
+        if (agentKeys.length > 0) {
+          console.warn('saveState: vault locked with agent keys present, skipping plaintext save');
+          // Save state without agent keys to prevent plaintext leak.
+          const state = {
+            accounts: get().accounts,
+            selectedAccount: get().selectedAccount,
+            wallets: get().wallets,
+            agentKeys: [], // strip sensitive data
+            multisigWallets: get().multisigWallets,
+            multisigProposals: get().multisigProposals,
+            chainNode: get().chainNode,
+          };
+          await chrome.storage.local.set({ [STORAGE_KEY]: state });
+          return;
+        }
+      }
       const agentKeys = _vaultKey
         ? await encryptAgentKeys(get().agentKeys, _vaultKey)
         : get().agentKeys;
@@ -310,12 +335,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   verifyPassword: async (password: string) => {
     try {
+      // Brute-force protection: enforce lockout after repeated failures.
+      const now = Date.now();
+      if (now < _lockoutUntil) {
+        const waitSec = Math.ceil((_lockoutUntil - now) / 1000);
+        console.warn(`verifyPassword: locked out, try again in ${waitSec}s`);
+        return false;
+      }
+
       const result = await chrome.storage.local.get(VAULT_PARAMS_KEY);
       const params = result[VAULT_PARAMS_KEY];
       if (!params) return true;
       const key = await deriveVaultKey(password, hexToBytes(params.salt), params.iterations);
       const decrypted = await vaultDecrypt(key, params.verifier);
       if (decrypted === 'falari-vault-v1') {
+        _failedAttempts = 0; // reset on success
         _vaultKey = key;
         // P0-2 fix: Export raw vault key to session storage for background SW.
         const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
@@ -327,8 +361,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
         set({ agentKeys: unlocked, isLocked: false });
         return true;
       }
+      // Wrong password: increment counter and apply lockout.
+      _failedAttempts++;
+      if (_failedAttempts >= MAX_ATTEMPTS_BEFORE_LOCKOUT) {
+        const multiplier = Math.pow(2, _failedAttempts - MAX_ATTEMPTS_BEFORE_LOCKOUT);
+        _lockoutUntil = Date.now() + LOCKOUT_BASE_MS * multiplier;
+        console.warn(`verifyPassword: ${_failedAttempts} failed attempts, locked out`);
+      }
       return false;
     } catch {
+      _failedAttempts++;
+      if (_failedAttempts >= MAX_ATTEMPTS_BEFORE_LOCKOUT) {
+        const multiplier = Math.pow(2, _failedAttempts - MAX_ATTEMPTS_BEFORE_LOCKOUT);
+        _lockoutUntil = Date.now() + LOCKOUT_BASE_MS * multiplier;
+      }
       return false;
     }
   },

@@ -23,6 +23,7 @@ const zh: Locale = {
     unlock: '解锁',
     passwordRequired: '请输入密码',
     passwordTooShort: '密码至少需要 8 个字符',
+    passwordTooWeak: '密码需包含以下至少 2 种字符：大写字母、小写字母、数字、特殊字符',
     passwordMismatch: '两次输入的密码不一致',
     wrongPassword: '密码错误',
     error: '发生错误，请重试。',
